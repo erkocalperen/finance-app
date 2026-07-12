@@ -1,10 +1,19 @@
-export default function CategoriesPage() {
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold">Kategoriler</h1>
-      <p className="text-muted-foreground mt-2 text-sm">
-        Gelir ve gider kategorileri burada tanımlanacak.
-      </p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+
+import { CategoriesManager } from "@/components/categories/categories-manager";
+import { createClient } from "@/lib/supabase/server";
+
+export default async function CategoriesPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: categories } = await supabase
+    .from("categories")
+    .select("id, name, type, color")
+    .order("name");
+
+  return <CategoriesManager categories={categories ?? []} />;
 }
