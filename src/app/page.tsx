@@ -9,7 +9,7 @@ export default function Home() {
           finance-app
         </h1>
         <p className="text-muted-foreground text-lg">
-          Kişisel gelirinizi, giderlerinizi ve hesaplarınızı tek bir yerden takip edin.
+          Kişisel gelirinizi, giderlerinizi ve hesaplarınızı tek bir yerden takip edin.Alperen
         </p>
         <Button asChild size="lg">
           <Link href="/login">Giriş Yap</Link>
