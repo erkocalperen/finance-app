@@ -15,3 +15,13 @@ export function formatDate(value: string | Date): string {
     year: "numeric",
   }).format(date);
 }
+
+// Postgres `date` sütununa yazılacak ISO gün (YYYY-MM-DD).
+// Bilinçli olarak LOCAL timezone kullanır — kullanıcı "bugün" derken
+// UTC değil kendi saatinin gününü kastediyor.
+export function toIsoDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
