@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
-import { Pagination } from "@/components/transactions/pagination";
+import { Pagination } from "@/components/pagination";
 import { TransactionsSummary } from "@/components/transactions/transactions-summary";
 import {
   TransactionsManager,

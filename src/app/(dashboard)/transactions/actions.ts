@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Currency } from "@/lib/constants";
+import type { Currency, EntryType } from "@/lib/constants";
 import {
   makeTransactionSchema,
-  type TransactionInput,
+  type TransactionInputRaw,
 } from "@/lib/validations/transaction";
 
 export type TransactionActionResult = { error: string } | undefined;
@@ -35,7 +35,7 @@ async function requireContext() {
 async function verifyReferences(
   supabase: SupabaseServerClient,
   userId: string,
-  input: Pick<TransactionInput, "account_id" | "category_id" | "type">,
+  input: { account_id: string; category_id: string; type: EntryType },
 ): Promise<TransactionActionResult> {
   const [{ data: account }, { data: category }] = await Promise.all([
     supabase
@@ -64,7 +64,7 @@ async function verifyReferences(
 }
 
 export async function createTransaction(
-  input: TransactionInput,
+  input: TransactionInputRaw,
 ): Promise<TransactionActionResult> {
   const ctx = await requireContext();
   if (!ctx) return { error: "Oturum bulunamadı." };
@@ -101,7 +101,7 @@ export async function createTransaction(
 
 export async function updateTransaction(
   id: string,
-  input: TransactionInput,
+  input: TransactionInputRaw,
 ): Promise<TransactionActionResult> {
   const ctx = await requireContext();
   if (!ctx) return { error: "Oturum bulunamadı." };

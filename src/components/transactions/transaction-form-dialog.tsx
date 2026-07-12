@@ -25,7 +25,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -43,6 +42,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
+import { CurrencyInput } from "@/components/currency-input";
 import {
   CURRENCIES,
   type Currency,
@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils";
 import {
   makeTransactionSchema,
   type TransactionInput,
+  type TransactionInputRaw,
 } from "@/lib/validations/transaction";
 import {
   createTransaction,
@@ -82,16 +83,36 @@ type Props = {
   baseCurrency: Currency;
 };
 
-function makeEmpty(baseCurrency: Currency): TransactionInput {
+function emptyFormValues(baseCurrency: Currency): TransactionInputRaw {
   return {
     type: "expense",
     account_id: "",
     category_id: "",
-    amount: 0,
+    amount: "",
     currency: baseCurrency,
-    fx_rate: 1,
+    fx_rate: "",
     occurred_on: toIsoDate(new Date()),
     note: "",
+  };
+}
+
+function initialToFormValues(
+  init: ({ id: string } & TransactionInput) | undefined,
+  baseCurrency: Currency,
+): TransactionInputRaw {
+  if (!init) return emptyFormValues(baseCurrency);
+  return {
+    type: init.type,
+    account_id: init.account_id,
+    category_id: init.category_id,
+    amount: String(init.amount),
+    currency: init.currency,
+    // Same-currency edit'te fx_rate = 1 kaydedilmiş olabilir; boş göster,
+    // farklı currency edit'te gerçek değer.
+    fx_rate:
+      init.currency === baseCurrency ? "" : String(init.fx_rate ?? ""),
+    occurred_on: init.occurred_on,
+    note: init.note ?? "",
   };
 }
 
@@ -110,19 +131,18 @@ export function TransactionFormDialog({
     () => makeTransactionSchema(baseCurrency),
     [baseCurrency],
   );
-  const empty = useMemo(() => makeEmpty(baseCurrency), [baseCurrency]);
 
-  const form = useForm<TransactionInput>({
+  const form = useForm<TransactionInputRaw>({
     resolver: zodResolver(schema),
-    defaultValues: initial ?? empty,
+    defaultValues: initialToFormValues(initial, baseCurrency),
   });
 
   useEffect(() => {
-    if (open) form.reset(initial ?? empty);
-  }, [open, initial, empty, form]);
+    if (open) form.reset(initialToFormValues(initial, baseCurrency));
+  }, [open, initial, baseCurrency, form]);
 
-  const type = form.watch("type");
-  const currency = form.watch("currency");
+  const type = form.watch("type") as EntryType;
+  const currency = form.watch("currency") as Currency;
   const showFxRate = currency !== baseCurrency;
 
   const filteredCategories = useMemo(
@@ -144,9 +164,18 @@ export function TransactionFormDialog({
     }
   }, [type, categories, form, open]);
 
-  function onSubmit(values: TransactionInput) {
-    // Kullanıcı fx_rate'i görmediğinde bile 1 gitmesini garantile.
-    const payload =
+  // Currency base'e döndüğünde fx_rate'i temizle — same-currency'de anlamsız,
+  // superRefine da 1 dışındaki değeri reddeder.
+  useEffect(() => {
+    if (!open) return;
+    if (currency === baseCurrency && form.getValues("fx_rate")) {
+      form.setValue("fx_rate", "", { shouldValidate: false });
+    }
+  }, [currency, baseCurrency, open, form]);
+
+  function onSubmit(values: TransactionInputRaw) {
+    // Same currency ise fx_rate'i 1 olarak zorla (schema optional, hidden field).
+    const payload: TransactionInputRaw =
       values.currency === baseCurrency
         ? { ...values, fx_rate: 1 }
         : values;
@@ -197,7 +226,7 @@ export function TransactionFormDialog({
                     <ToggleGroup
                       type="single"
                       variant="outline"
-                      value={field.value}
+                      value={typeof field.value === "string" ? field.value : ""}
                       onValueChange={(v) => v && field.onChange(v)}
                       className="w-full"
                     >
@@ -222,23 +251,11 @@ export function TransactionFormDialog({
                   <FormItem>
                     <FormLabel>Tutar</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        inputMode="decimal"
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
                         disabled={isPending}
-                        value={
-                          Number.isFinite(field.value) && field.value !== 0
-                            ? field.value
-                            : field.value === 0
-                              ? 0
-                              : ""
-                        }
-                        onChange={(e) => {
-                          const v = e.target.valueAsNumber;
-                          field.onChange(Number.isFinite(v) ? v : 0);
-                        }}
+                        placeholder="0,00"
                       />
                     </FormControl>
                     <FormMessage />
@@ -252,7 +269,7 @@ export function TransactionFormDialog({
                   <FormItem>
                     <FormLabel>Birim</FormLabel>
                     <Select
-                      value={field.value}
+                      value={typeof field.value === "string" ? field.value : baseCurrency}
                       onValueChange={field.onChange}
                       disabled={isPending}
                     >
@@ -283,19 +300,11 @@ export function TransactionFormDialog({
                   <FormItem>
                     <FormLabel>Kur</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.000001"
-                        min="0"
-                        inputMode="decimal"
+                      <CurrencyInput
+                        value={field.value}
+                        onChange={field.onChange}
                         disabled={isPending}
-                        value={
-                          Number.isFinite(field.value) ? field.value : ""
-                        }
-                        onChange={(e) => {
-                          const v = e.target.valueAsNumber;
-                          field.onChange(Number.isFinite(v) ? v : 0);
-                        }}
+                        placeholder="0,000000"
                       />
                     </FormControl>
                     <p className="text-muted-foreground text-xs">
@@ -314,7 +323,11 @@ export function TransactionFormDialog({
                 <FormItem>
                   <FormLabel>Hesap</FormLabel>
                   <Select
-                    value={field.value || undefined}
+                    value={
+                      typeof field.value === "string" && field.value
+                        ? field.value
+                        : undefined
+                    }
                     onValueChange={field.onChange}
                     disabled={isPending}
                   >
@@ -354,7 +367,11 @@ export function TransactionFormDialog({
                 <FormItem>
                   <FormLabel>Kategori</FormLabel>
                   <Select
-                    value={field.value || undefined}
+                    value={
+                      typeof field.value === "string" && field.value
+                        ? field.value
+                        : undefined
+                    }
                     onValueChange={field.onChange}
                     disabled={isPending}
                   >
@@ -392,43 +409,45 @@ export function TransactionFormDialog({
             <FormField
               control={form.control}
               name="occurred_on"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tarih</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={isPending}
-                          className={cn(
-                            "w-full justify-start font-normal",
-                            !field.value && "text-muted-foreground",
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {field.value ? formatDate(field.value) : "Tarih seç"}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-auto p-0"
-                      align="start"
-                    >
-                      <Calendar
-                        mode="single"
-                        selected={
-                          field.value ? new Date(field.value) : undefined
-                        }
-                        onSelect={(d) => d && field.onChange(toIsoDate(d))}
-                        locale={tr}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
+              render={({ field }) => {
+                const dateStr =
+                  typeof field.value === "string" ? field.value : "";
+                return (
+                  <FormItem>
+                    <FormLabel>Tarih</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={isPending}
+                            className={cn(
+                              "w-full justify-start font-normal",
+                              !dateStr && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateStr ? formatDate(dateStr) : "Tarih seç"}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-auto p-0"
+                        align="start"
+                      >
+                        <Calendar
+                          mode="single"
+                          selected={dateStr ? new Date(dateStr) : undefined}
+                          onSelect={(d) => d && field.onChange(toIsoDate(d))}
+                          locale={tr}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
 
             <FormField
@@ -443,8 +462,11 @@ export function TransactionFormDialog({
                       maxLength={200}
                       disabled={isPending}
                       placeholder="Kısa açıklama..."
-                      {...field}
-                      value={field.value ?? ""}
+                      name={field.name}
+                      ref={field.ref}
+                      onBlur={field.onBlur}
+                      onChange={field.onChange}
+                      value={typeof field.value === "string" ? field.value : ""}
                     />
                   </FormControl>
                   <FormMessage />

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ACCOUNT_TYPES, CURRENCIES } from "@/lib/constants";
+import { finiteAmount } from "./coerce";
 
 export const accountSchema = z.object({
   name: z
@@ -11,9 +12,10 @@ export const accountSchema = z.object({
   type: z.enum(ACCOUNT_TYPES, { message: "Hesap tipini seçin." }),
   currency: z.enum(CURRENCIES, { message: "Para birimini seçin." }),
   // Kredi kartı borcu için negatif olabilir.
-  initial_balance: z
-    .number({ message: "Bakiye sayısal olmalı." })
-    .finite({ message: "Geçerli bir bakiye girin." }),
+  initial_balance: finiteAmount({
+    requiredMessage: "Başlangıç bakiyesi zorunludur.",
+  }),
 });
 
 export type AccountInput = z.infer<typeof accountSchema>;
+export type AccountInputRaw = z.input<typeof accountSchema>;

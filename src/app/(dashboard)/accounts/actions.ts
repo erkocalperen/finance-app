@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   accountSchema,
-  type AccountInput,
+  type AccountInputRaw,
 } from "@/lib/validations/account";
 
 export type AccountActionResult = { error: string } | undefined;
@@ -19,7 +19,7 @@ async function requireUser() {
 }
 
 export async function createAccount(
-  input: AccountInput,
+  input: AccountInputRaw,
 ): Promise<AccountActionResult> {
   const ctx = await requireUser();
   if (!ctx) return { error: "Oturum bulunamadı." };
@@ -43,7 +43,7 @@ export async function createAccount(
 
 export async function updateAccount(
   id: string,
-  input: AccountInput,
+  input: AccountInputRaw,
 ): Promise<AccountActionResult> {
   const ctx = await requireUser();
   if (!ctx) return { error: "Oturum bulunamadı." };

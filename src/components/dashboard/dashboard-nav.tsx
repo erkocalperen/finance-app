@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
   LayoutDashboard,
+  Repeat,
   Settings,
   Tag,
   Wallet,
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/transactions", label: "İşlemler", icon: ArrowLeftRight },
+  { href: "/transfers", label: "Transferler", icon: Repeat },
   { href: "/accounts", label: "Hesaplar", icon: Wallet },
   { href: "/categories", label: "Kategoriler", icon: Tag },
   { href: "/settings", label: "Ayarlar", icon: Settings },

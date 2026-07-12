@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
+import { useEffect, useMemo, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -31,15 +31,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CurrencyInput } from "@/components/currency-input";
 import {
   ACCOUNT_TYPES,
   ACCOUNT_TYPE_LABELS,
   CURRENCIES,
   DEFAULT_CURRENCY,
+  type AccountType,
+  type Currency,
 } from "@/lib/constants";
 import {
   accountSchema,
   type AccountInput,
+  type AccountInputRaw,
 } from "@/lib/validations/account";
 import {
   createAccount,
@@ -53,12 +57,24 @@ type Props = {
   initial?: { id: string } & AccountInput;
 };
 
-const EMPTY: AccountInput = {
+const EMPTY: AccountInputRaw = {
   name: "",
   type: "cash",
   currency: DEFAULT_CURRENCY,
-  initial_balance: 0,
+  initial_balance: "",
 };
+
+function initialToFormValues(
+  init: ({ id: string } & AccountInput) | undefined,
+): AccountInputRaw {
+  if (!init) return EMPTY;
+  return {
+    name: init.name,
+    type: init.type,
+    currency: init.currency,
+    initial_balance: String(init.initial_balance),
+  };
+}
 
 export function AccountFormDialog({
   open,
@@ -68,16 +84,18 @@ export function AccountFormDialog({
 }: Props) {
   const [isPending, startTransition] = useTransition();
 
-  const form = useForm<AccountInput>({
+  const defaults = useMemo(() => initialToFormValues(initial), [initial]);
+
+  const form = useForm<AccountInputRaw>({
     resolver: zodResolver(accountSchema),
-    defaultValues: initial ?? EMPTY,
+    defaultValues: defaults,
   });
 
   useEffect(() => {
-    if (open) form.reset(initial ?? EMPTY);
-  }, [open, initial, form]);
+    if (open) form.reset(defaults);
+  }, [open, defaults, form]);
 
-  function onSubmit(values: AccountInput) {
+  function onSubmit(values: AccountInputRaw) {
     startTransition(async () => {
       const result =
         mode === "edit" && initial
@@ -124,7 +142,11 @@ export function AccountFormDialog({
                     <Input
                       placeholder="Örn. Vadesiz Hesap"
                       disabled={isPending}
-                      {...field}
+                      name={field.name}
+                      ref={field.ref}
+                      onBlur={field.onBlur}
+                      onChange={field.onChange}
+                      value={typeof field.value === "string" ? field.value : ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -140,7 +162,11 @@ export function AccountFormDialog({
                   <FormItem>
                     <FormLabel>Tip</FormLabel>
                     <Select
-                      value={field.value}
+                      value={
+                        typeof field.value === "string"
+                          ? (field.value as AccountType)
+                          : "cash"
+                      }
                       onValueChange={field.onChange}
                       disabled={isPending}
                     >
@@ -169,7 +195,11 @@ export function AccountFormDialog({
                   <FormItem>
                     <FormLabel>Para Birimi</FormLabel>
                     <Select
-                      value={field.value}
+                      value={
+                        typeof field.value === "string"
+                          ? (field.value as Currency)
+                          : DEFAULT_CURRENCY
+                      }
                       onValueChange={field.onChange}
                       disabled={isPending}
                     >
@@ -199,16 +229,12 @@ export function AccountFormDialog({
                 <FormItem>
                   <FormLabel>Başlangıç Bakiyesi</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      inputMode="decimal"
+                    <CurrencyInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      allowNegative
                       disabled={isPending}
-                      value={Number.isFinite(field.value) ? field.value : 0}
-                      onChange={(e) => {
-                        const v = e.target.valueAsNumber;
-                        field.onChange(Number.isFinite(v) ? v : 0);
-                      }}
+                      placeholder="0,00"
                     />
                   </FormControl>
                   <p className="text-muted-foreground text-xs">

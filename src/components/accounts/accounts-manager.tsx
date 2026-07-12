@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   Archive,
   ArchiveRestore,
+  ArrowRightLeft,
   MoreVertical,
   Pencil,
   Plus,
@@ -50,6 +51,8 @@ import {
   deleteAccount,
   setAccountArchived,
 } from "@/app/(dashboard)/accounts/actions";
+import type { TransferInputRaw } from "@/lib/validations/transfer";
+import { TransferFormDialog } from "@/components/transfers/transfer-form-dialog";
 import { AccountFormDialog } from "./account-form-dialog";
 
 export type AccountRow = {
@@ -66,8 +69,15 @@ type FormState =
   | { mode: "create" }
   | { mode: "edit"; account: AccountRow };
 
+type TransferState = {
+  prefill: Partial<TransferInputRaw>;
+};
+
 export function AccountsManager({ accounts }: { accounts: AccountRow[] }) {
   const [formState, setFormState] = useState<FormState | null>(null);
+  const [transferState, setTransferState] = useState<TransferState | null>(
+    null,
+  );
   const [toDelete, setToDelete] = useState<AccountRow | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [isDeleting, startDelete] = useTransition();
@@ -83,6 +93,18 @@ export function AccountsManager({ accounts }: { accounts: AccountRow[] }) {
   }, [accounts, showArchived]);
 
   const archivedCount = accounts.filter((a) => a.is_archived).length;
+
+  const activeAccountsForTransfer = useMemo(
+    () =>
+      accounts
+        .filter((a) => !a.is_archived)
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          currency: a.currency,
+        })),
+    [accounts],
+  );
 
   function toggleArchived(account: AccountRow) {
     startArchive(async () => {
@@ -112,6 +134,17 @@ export function AccountsManager({ accounts }: { accounts: AccountRow[] }) {
       }
       toast.success("Hesap silindi.");
       setToDelete(null);
+    });
+  }
+
+  function openPayDebt(account: AccountRow) {
+    const debtStr = String(Math.abs(account.balance));
+    setTransferState({
+      prefill: {
+        to_account_id: account.id,
+        amount: debtStr,
+        received_amount: debtStr,
+      },
     });
   }
 
@@ -154,6 +187,7 @@ export function AccountsManager({ accounts }: { accounts: AccountRow[] }) {
               onEdit={() => setFormState({ mode: "edit", account })}
               onDelete={() => setToDelete(account)}
               onToggleArchive={() => toggleArchived(account)}
+              onPayDebt={() => openPayDebt(account)}
               archiveDisabled={isArchiving}
             />
           ))}
@@ -177,6 +211,16 @@ export function AccountsManager({ accounts }: { accounts: AccountRow[] }) {
               }
             : undefined
         }
+      />
+
+      <TransferFormDialog
+        open={transferState !== null}
+        onOpenChange={(open) => {
+          if (!open) setTransferState(null);
+        }}
+        mode="create"
+        prefill={transferState?.prefill}
+        accounts={activeAccountsForTransfer}
       />
 
       <AlertDialog
@@ -216,14 +260,19 @@ function AccountCard({
   onEdit,
   onDelete,
   onToggleArchive,
+  onPayDebt,
   archiveDisabled,
 }: {
   account: AccountRow;
   onEdit: () => void;
   onDelete: () => void;
   onToggleArchive: () => void;
+  onPayDebt: () => void;
   archiveDisabled: boolean;
 }) {
+  const isCreditCardDebt =
+    account.type === "credit_card" && account.balance < 0;
+
   return (
     <Card className={account.is_archived ? "opacity-70" : undefined}>
       <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
@@ -277,10 +326,30 @@ function AccountCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-semibold tabular-nums">
-          {formatCurrency(account.balance, account.currency)}
-        </div>
+      <CardContent className="space-y-3">
+        {isCreditCardDebt ? (
+          <div>
+            <div className="text-muted-foreground text-xs">Borç</div>
+            <div className="text-2xl font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+              {formatCurrency(Math.abs(account.balance), account.currency)}
+            </div>
+          </div>
+        ) : (
+          <div className="text-2xl font-semibold tabular-nums">
+            {formatCurrency(account.balance, account.currency)}
+          </div>
+        )}
+        {isCreditCardDebt && !account.is_archived && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onPayDebt}
+            className="w-full sm:w-auto"
+          >
+            <ArrowRightLeft className="mr-2 h-4 w-4" />
+            Borç Öde
+          </Button>
+        )}
       </CardContent>
       <CardFooter className="text-muted-foreground text-xs">
         Başlangıç: {formatCurrency(account.initial_balance, account.currency)}
