@@ -8,6 +8,7 @@ import {
   Repeat,
   Settings,
   Tag,
+  TrendingUp,
   Wallet,
 } from "lucide-react";
 
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/transactions", label: "İşlemler", icon: ArrowLeftRight },
   { href: "/transfers", label: "Transferler", icon: Repeat },
+  { href: "/investments", label: "Yatırımlar", icon: TrendingUp },
   { href: "/accounts", label: "Hesaplar", icon: Wallet },
   { href: "/categories", label: "Kategoriler", icon: Tag },
   { href: "/settings", label: "Ayarlar", icon: Settings },

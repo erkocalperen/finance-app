@@ -78,56 +78,8 @@ export default async function TransactionsPage({
   const rawPage = Number(getStr("page") ?? 1);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
-  // Profil, hesaplar, kategoriler — form ve filtre için.
-  const [
-    profileRes,
-    accountsRes,
-    categoriesRes,
-    allCountRes,
-  ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("base_currency")
-      .eq("id", user.id)
-      .single(),
-    supabase
-      .from("accounts")
-      .select("id, name, currency, is_archived")
-      .eq("user_id", user.id)
-      .order("name"),
-    supabase
-      .from("categories")
-      .select("id, name, type, color")
-      .eq("user_id", user.id)
-      .order("name"),
-    supabase
-      .from("transactions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id),
-  ]);
-
-  const baseCurrency = (profileRes.data?.base_currency ?? "TRY") as Currency;
-
-  const activeAccounts: FormAccountOption[] = (accountsRes.data ?? [])
-    .filter((a) => !a.is_archived)
-    .map((a) => ({
-      id: a.id,
-      name: a.name,
-      currency: a.currency as Currency,
-    }));
-
-  const categoriesForForm: FormCategoryOption[] = (categoriesRes.data ?? []).map(
-    (c) => ({
-      id: c.id,
-      name: c.name,
-      type: c.type as EntryType,
-      color: c.color,
-    }),
-  );
-
-  const totalUserTransactions = allCountRes.count ?? 0;
-
-  // Filtrelenmiş sayfa sorgusu ve toplam sayı.
+  // Query builder'lar filtrelerle önceden hazırlanıyor; Promise.all altındaki
+  // 6 sorgu birbirini beklemeden aynı anda uçuşur (fra1 → Frankfurt gidişi tek).
   const listQuery = supabase
     .from("transactions")
     .select(
@@ -138,7 +90,6 @@ export default async function TransactionsPage({
     )
     .eq("user_id", user.id);
 
-  // Aynı filtreleri hem liste hem özet için tekrarlıyoruz.
   const summaryQuery = supabase
     .from("transactions")
     .select("type, base_amount")
@@ -170,7 +121,57 @@ export default async function TransactionsPage({
     .order("created_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
-  const [listRes, summaryRes] = await Promise.all([listQuery, summaryQuery]);
+  const [
+    profileRes,
+    accountsRes,
+    categoriesRes,
+    allCountRes,
+    listRes,
+    summaryRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("base_currency")
+      .eq("id", user.id)
+      .single(),
+    supabase
+      .from("accounts")
+      .select("id, name, currency, is_archived")
+      .eq("user_id", user.id)
+      .order("name"),
+    supabase
+      .from("categories")
+      .select("id, name, type, color")
+      .eq("user_id", user.id)
+      .order("name"),
+    supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id),
+    listQuery,
+    summaryQuery,
+  ]);
+
+  const baseCurrency = (profileRes.data?.base_currency ?? "TRY") as Currency;
+
+  const activeAccounts: FormAccountOption[] = (accountsRes.data ?? [])
+    .filter((a) => !a.is_archived)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      currency: a.currency as Currency,
+    }));
+
+  const categoriesForForm: FormCategoryOption[] = (categoriesRes.data ?? []).map(
+    (c) => ({
+      id: c.id,
+      name: c.name,
+      type: c.type as EntryType,
+      color: c.color,
+    }),
+  );
+
+  const totalUserTransactions = allCountRes.count ?? 0;
 
   const rows: TransactionRow[] = ((listRes.data ?? []) as TransactionEmbed[])
     .map((r) => {

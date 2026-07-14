@@ -13,6 +13,7 @@ import {
 } from "@/components/dashboard/recent-transactions";
 import { SummaryTiles } from "@/components/dashboard/summary-tiles";
 import { createClient } from "@/lib/supabase/server";
+import { extendWithInvestments } from "@/types/database-investments";
 import type { Currency, EntryType } from "@/lib/constants";
 import {
   currentMonth,
@@ -35,11 +36,12 @@ function first<T>(v: T | T[] | null | undefined): T | null {
 }
 
 export default async function DashboardPage({ searchParams }: PageProps) {
-  const supabase = await createClient();
+  const base = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await base.auth.getUser();
   if (!user) redirect("/login");
+  const supabase = extendWithInvestments(base);
 
   const params = await searchParams;
   const monthRaw =
@@ -56,6 +58,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     monthlyRes,
     categoryRes,
     recentRes,
+    holdingsRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -98,20 +101,45 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .order("occurred_on", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("portfolio_holdings")
+      .select("currency, market_value, current_price")
+      .eq("user_id", user.id),
   ]);
 
   const baseCurrency = (profileRes.data?.base_currency ?? "TRY") as Currency;
   const hasAnyData = (countRes.count ?? 0) > 0;
   const hasAccounts = (accountsCountRes.count ?? 0) > 0;
 
-  // Bakiyeleri para birimine göre grupla.
-  const balanceMap = new Map<Currency, number>();
+  // Nakit bakiyeleri para birimine göre grupla.
+  const cashMap = new Map<Currency, number>();
   for (const b of balancesRes.data ?? []) {
     if (!b.currency || b.balance == null) continue;
     const c = b.currency as Currency;
-    balanceMap.set(c, (balanceMap.get(c) ?? 0) + Number(b.balance));
+    cashMap.set(c, (cashMap.get(c) ?? 0) + Number(b.balance));
   }
-  const balancesByCurrency = Array.from(balanceMap.entries())
+  const cashByCurrency = Array.from(cashMap.entries())
+    .map(([currency, total]) => ({ currency, total }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+
+  // Portföy: fiyatı olan pozisyonların market_value'sını para birimine göre topla.
+  // Fiyatı olmayan pozisyonları saymıyoruz (0 uydurmuyoruz) — sayısını
+  // hasMissingPrices olarak dashboard'a bildiriyoruz.
+  const portfolioMap = new Map<Currency, number>();
+  let hasMissingPrices = false;
+  for (const h of holdingsRes.data ?? []) {
+    if (h.current_price == null) {
+      hasMissingPrices = true;
+      continue;
+    }
+    if (!h.currency || h.market_value == null) continue;
+    const c = h.currency as Currency;
+    portfolioMap.set(
+      c,
+      (portfolioMap.get(c) ?? 0) + Number(h.market_value),
+    );
+  }
+  const portfolioByCurrency = Array.from(portfolioMap.entries())
     .map(([currency, total]) => ({ currency, total }))
     .sort((a, b) => a.currency.localeCompare(b.currency));
 
@@ -200,7 +228,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             currentExpense={currentExpense}
             prevIncome={prevIncome}
             prevExpense={prevExpense}
-            balancesByCurrency={balancesByCurrency}
+            cashByCurrency={cashByCurrency}
+            portfolioByCurrency={portfolioByCurrency}
+            hasMissingPrices={hasMissingPrices}
             baseCurrency={baseCurrency}
           />
 

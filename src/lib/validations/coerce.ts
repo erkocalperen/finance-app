@@ -51,3 +51,20 @@ export function optionalPositiveAmount() {
     z.number().finite().positive().optional(),
   );
 }
+
+/**
+ * Negatif olmayan tutar; boş giriş default'a düşer (komisyon/masraf gibi).
+ * Boş bırakıldığında hata yerine 0 kabul edilir.
+ */
+export function nonnegativeWithDefault(defaultValue = 0) {
+  return z.preprocess(
+    (val) => {
+      const parsed = parseNumericInput(val);
+      return parsed === undefined ? defaultValue : parsed;
+    },
+    z
+      .number({ message: "Geçerli bir tutar girin." })
+      .finite({ message: "Geçerli bir tutar girin." })
+      .nonnegative({ message: "Negatif olamaz." }),
+  );
+}

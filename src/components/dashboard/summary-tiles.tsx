@@ -1,23 +1,28 @@
-import { ArrowDownRight, ArrowUpRight, Scale, Wallet } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Scale,
+  Wallet,
+} from "lucide-react";
 
 import { formatCurrency } from "@/lib/format";
 import type { Currency } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+
+type CurrencyTotal = { currency: Currency; total: number };
 
 type Props = {
   currentIncome: number;
   currentExpense: number;
   prevIncome: number;
   prevExpense: number;
-  balancesByCurrency: Array<{ currency: Currency; total: number }>;
+  cashByCurrency: CurrencyTotal[];
+  portfolioByCurrency: CurrencyTotal[];
+  hasMissingPrices: boolean;
   baseCurrency: Currency;
 };
 
-/**
- * pct'nin metin karşılığı. prev = 0 iken bölme yok — "—" göster.
- * Net için prev negatifse |prev| kullan (semantik olarak "iyileşme/kötüleşme"
- * artı-eksi yönü tutarlı kalsın).
- */
 function formatDelta(current: number, prev: number): string {
   if (prev === 0) return "—";
   const denom = Math.abs(prev);
@@ -32,7 +37,9 @@ export function SummaryTiles({
   currentExpense,
   prevIncome,
   prevExpense,
-  balancesByCurrency,
+  cashByCurrency,
+  portfolioByCurrency,
+  hasMissingPrices,
   baseCurrency,
 }: Props) {
   const net = currentIncome - currentExpense;
@@ -61,28 +68,90 @@ export function SummaryTiles({
         tone={net >= 0 ? "income" : "expense"}
         subtitle={formatDelta(net, prevNet)}
       />
-      <Tile
-        label="Toplam Varlık"
-        value={
-          balancesByCurrency.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
-            <span className="flex flex-wrap items-baseline gap-x-2">
-              {balancesByCurrency.map((b, i) => (
-                <span key={b.currency}>
-                  {formatCurrency(b.total, b.currency)}
-                  {i < balancesByCurrency.length - 1 && (
-                    <span className="text-muted-foreground ml-2">·</span>
-                  )}
-                </span>
-              ))}
-            </span>
-          )
-        }
-        icon={<Wallet className="h-4 w-4" />}
-        tone="neutral"
-        subtitle="Şu anki bakiye"
+      <TotalAssetsTile
+        cashByCurrency={cashByCurrency}
+        portfolioByCurrency={portfolioByCurrency}
+        hasMissingPrices={hasMissingPrices}
+        baseCurrency={baseCurrency}
       />
+    </div>
+  );
+}
+
+function TotalAssetsTile({
+  cashByCurrency,
+  portfolioByCurrency,
+  hasMissingPrices,
+  baseCurrency,
+}: {
+  cashByCurrency: CurrencyTotal[];
+  portfolioByCurrency: CurrencyTotal[];
+  hasMissingPrices: boolean;
+  baseCurrency: Currency;
+}) {
+  const currencies = Array.from(
+    new Set([
+      ...cashByCurrency.map((c) => c.currency),
+      ...portfolioByCurrency.map((p) => p.currency),
+    ]),
+  ).sort((a, b) => {
+    // base'i önce göster
+    if (a === baseCurrency && b !== baseCurrency) return -1;
+    if (b === baseCurrency && a !== baseCurrency) return 1;
+    return a.localeCompare(b);
+  });
+
+  const rows = currencies.map((c) => {
+    const cash = cashByCurrency.find((x) => x.currency === c)?.total ?? 0;
+    const portfolio =
+      portfolioByCurrency.find((x) => x.currency === c)?.total ?? 0;
+    return { currency: c, cash, portfolio, total: cash + portfolio };
+  });
+
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Toplam Varlık</span>
+        <span className="text-foreground shrink-0 flex items-center gap-1">
+          {hasMissingPrices && (
+            <AlertTriangle
+              className="text-amber-500 h-4 w-4"
+              aria-label="Bazı enstrümanların güncel fiyatı yok"
+            />
+          )}
+          <Wallet className="h-4 w-4" />
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="text-muted-foreground mt-2 text-2xl font-semibold">
+          —
+        </div>
+      ) : (
+        <div className="mt-2 space-y-1.5">
+          {rows.map((r) => (
+            <div key={r.currency} className="space-y-0.5">
+              <div
+                className={cn(
+                  "text-xl font-semibold tabular-nums",
+                )}
+              >
+                {formatCurrency(r.total, r.currency)}
+              </div>
+              {r.portfolio > 0 && (
+                <div className="text-muted-foreground text-xs tabular-nums">
+                  Nakit {formatCurrency(r.cash, r.currency)} · Yatırım{" "}
+                  {formatCurrency(r.portfolio, r.currency)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="text-muted-foreground mt-2 text-xs">
+        {hasMissingPrices ? "Bazı fiyatlar eksik" : "Şu anki bakiye"}
+      </div>
     </div>
   );
 }
