@@ -57,8 +57,8 @@ export function RecentTransactions({ items }: Props) {
                     className={cn(
                       "shrink-0 text-sm font-medium tabular-nums",
                       row.type === "income"
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-rose-600 dark:text-rose-400",
+                        ? "text-income"
+                        : "text-expense",
                     )}
                   >
                     {row.type === "income" ? "+" : "−"}{" "}

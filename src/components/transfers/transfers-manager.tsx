@@ -305,7 +305,7 @@ function TransfersCards({
 
 function ExpenseBadge() {
   return (
-    <span className="inline-flex h-5 items-center rounded-full border border-rose-200 bg-rose-50 px-2 text-xs font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
+    <span className="inline-flex h-5 items-center rounded-full border border-expense/30 bg-expense/10 px-2 text-xs font-medium text-expense">
       Gider sayılır
     </span>
   );

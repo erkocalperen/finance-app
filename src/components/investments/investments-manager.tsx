@@ -57,6 +57,7 @@ import {
   type TradeInstrumentOption,
 } from "./trade-form-dialog";
 import { ManualPricePopover } from "./manual-price-popover";
+import { RefreshPricesButton } from "./refresh-prices-button";
 
 export type HoldingRow = {
   instrumentId: string;
@@ -70,6 +71,8 @@ export type HoldingRow = {
   totalCost: number;
   currentPrice: number | null;
   priceAsOf: string | null;
+  /** 'bigpara' | 'manual' | ... — latest_instrument_prices.source. */
+  priceSource: string | null;
   marketValue: number | null;
   pnl: number | null;
   pnlPct: number | null;
@@ -121,8 +124,8 @@ const KIND_LABEL: Record<InstrumentKind, string> = {
 
 function pnlToneClass(v: number | null) {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-600 dark:text-emerald-400";
-  if (v < 0) return "text-rose-600 dark:text-rose-400";
+  if (v > 0) return "text-income";
+  if (v < 0) return "text-expense";
   return "";
 }
 
@@ -136,7 +139,7 @@ function priceAgeClass(asOf: string | null): string {
   if (!asOf) return "";
   const age = Date.now() - new Date(asOf).getTime();
   const oneDay = 24 * 60 * 60 * 1000;
-  if (age > 7 * oneDay) return "text-rose-600 dark:text-rose-400";
+  if (age > 7 * oneDay) return "text-expense";
   if (age > oneDay) return "text-amber-600 dark:text-amber-400";
   return "text-muted-foreground";
 }
@@ -215,17 +218,20 @@ export function InvestmentsManager({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Yatırımlar</h1>
           <p className="text-muted-foreground text-sm">
-            Altın, gümüş ve hisse pozisyonlarını takip et. Fiyatlar manuel
-            girilir; gelir/gider raporlarına dahil olmaz.
+            Altın, gümüş ve hisse pozisyonlarını takip et. Hisse fiyatları
+            otomatik çekilir; altın/gümüş manuel.
           </p>
         </div>
-        <Button
-          onClick={() => setFormState({ mode: "create" })}
-          disabled={accounts.length === 0}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Yeni İşlem
-        </Button>
+        <div className="flex items-center gap-2">
+          <RefreshPricesButton />
+          <Button
+            onClick={() => setFormState({ mode: "create" })}
+            disabled={accounts.length === 0}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Yeni İşlem
+          </Button>
+        </div>
       </div>
 
       {emptyKind === "no-data" ? (
@@ -450,14 +456,21 @@ function SummaryTile({
 }) {
   const cls =
     tone === "positive"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-income"
       : tone === "negative"
-        ? "text-rose-600 dark:text-rose-400"
+        ? "text-expense"
         : "";
   return (
-    <div className="rounded-lg border p-4">
-      <div className="text-muted-foreground text-xs">{label}</div>
-      <div className={cn("mt-1 text-2xl font-semibold tabular-nums", cls)}>
+    <div className="rounded-xl border p-4">
+      <div className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "font-display mt-1 text-2xl font-semibold tabular-nums leading-tight",
+          cls,
+        )}
+      >
         {value}
       </div>
       {subValue && (
@@ -484,6 +497,13 @@ function PriceCell({ h }: { h: HoldingRow }) {
       />
     );
   }
+  const sourceLabel =
+    h.priceSource === "bigpara"
+      ? "Bigpara"
+      : h.priceSource === "manual"
+        ? "Manuel"
+        : (h.priceSource ?? "");
+
   return (
     <ManualPricePopover
       instrumentId={h.instrumentId}
@@ -500,6 +520,7 @@ function PriceCell({ h }: { h: HoldingRow }) {
           </span>
           {h.priceAsOf && (
             <span className={cn("text-[10px]", priceAgeClass(h.priceAsOf))}>
+              {sourceLabel && <>{sourceLabel} · </>}
               {formatDistanceToNow(new Date(h.priceAsOf), {
                 locale: tr,
                 addSuffix: true,

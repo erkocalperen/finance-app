@@ -130,10 +130,12 @@ function TotalAssetsTile({
   });
 
   return (
-    <div className="rounded-lg border p-4">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">Brüt Varlık</span>
-        <span className="text-foreground flex shrink-0 items-center gap-1">
+    <div className="rounded-xl border p-4">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground font-medium tracking-[0.08em] uppercase">
+          Brüt Varlık
+        </span>
+        <span className="text-muted-foreground flex shrink-0 items-center gap-1">
           {hasMissingPrices && (
             <AlertTriangle
               className="h-4 w-4 text-amber-500"
@@ -148,9 +150,14 @@ function TotalAssetsTile({
         <EmptyValue />
       ) : (
         <div className="mt-2 space-y-1.5">
-          {rows.map((r) => (
+          {rows.map((r, i) => (
             <div key={r.currency} className="space-y-0.5">
-              <div className="text-xl font-semibold tabular-nums">
+              <div
+                className={cn(
+                  "font-display tabular-nums leading-tight",
+                  i === 0 ? "text-2xl font-semibold" : "text-lg font-medium",
+                )}
+              >
                 {formatCurrency(r.total, r.currency)}
               </div>
               {r.portfolio > 0 && (
@@ -181,19 +188,24 @@ function DebtTile({
   const rows = sortCurrencyTotals(debtByCurrency, baseCurrency);
 
   return (
-    <div className="rounded-lg border p-4">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">Borç</span>
-        <CreditCard className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+    <div className="rounded-xl border p-4">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground font-medium tracking-[0.08em] uppercase">
+          Borç
+        </span>
+        <CreditCard className="h-4 w-4 text-expense" />
       </div>
       {rows.length === 0 ? (
         <EmptyValue />
       ) : (
-        <div className="mt-2 space-y-1.5">
-          {rows.map((r) => (
+        <div className="mt-2 space-y-1">
+          {rows.map((r, i) => (
             <div
               key={r.currency}
-              className="text-xl font-semibold tabular-nums text-rose-600 dark:text-rose-400"
+              className={cn(
+                "font-display text-expense tabular-nums leading-tight",
+                i === 0 ? "text-2xl font-semibold" : "text-lg font-medium",
+              )}
             >
               {formatCurrency(r.total, r.currency)}
             </div>
@@ -238,24 +250,37 @@ function NetWorthTile({
     return { currency: c, total: cash + portfolio - debt };
   });
 
+  // İmza öğesi: sol kenarda 3px aksan çizgisi. Renk, base_currency'deki
+  // net değere göre — pozitifse income, negatifse expense.
+  const primary = rows.find((r) => r.currency === baseCurrency) ?? rows[0];
+  const accentTone: "income" | "expense" =
+    primary && primary.total < 0 ? "expense" : "income";
+  const accentColor =
+    accentTone === "income" ? "bg-income" : "bg-expense";
+
   return (
-    <div className="rounded-lg border p-4">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">Net Değer</span>
-        <Scale className="h-4 w-4" />
+    <div className="relative overflow-hidden rounded-xl border p-4">
+      <span
+        aria-hidden
+        className={cn("absolute inset-y-0 left-0 w-[3px]", accentColor)}
+      />
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground font-medium tracking-[0.08em] uppercase">
+          Net Durum
+        </span>
+        <Scale className="h-4 w-4 text-muted-foreground" />
       </div>
       {rows.length === 0 ? (
         <EmptyValue />
       ) : (
-        <div className="mt-2 space-y-1.5">
-          {rows.map((r) => (
+        <div className="mt-2 space-y-1">
+          {rows.map((r, i) => (
             <div
               key={r.currency}
               className={cn(
-                "text-xl font-semibold tabular-nums",
-                r.total >= 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-rose-600 dark:text-rose-400",
+                "font-display tabular-nums leading-tight",
+                i === 0 ? "text-3xl font-semibold" : "text-lg font-medium",
+                r.total >= 0 ? "text-income" : "text-expense",
               )}
             >
               {formatCurrency(r.total, r.currency)}
@@ -264,7 +289,7 @@ function NetWorthTile({
         </div>
       )}
       <div className="text-muted-foreground mt-2 text-xs">
-        Brüt varlık - borç
+        Brüt varlık − borç
       </div>
     </div>
   );
@@ -291,18 +316,25 @@ function Tile({
 }) {
   const toneClass =
     tone === "income"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-income"
       : tone === "expense"
-        ? "text-rose-600 dark:text-rose-400"
+        ? "text-expense"
         : "text-foreground";
 
   return (
-    <div className="rounded-lg border p-4">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{label}</span>
+    <div className="rounded-xl border p-4">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground font-medium tracking-[0.08em] uppercase">
+          {label}
+        </span>
         <span className={cn("shrink-0", toneClass)}>{icon}</span>
       </div>
-      <div className={cn("mt-2 text-2xl font-semibold tabular-nums", toneClass)}>
+      <div
+        className={cn(
+          "font-display mt-2 text-2xl font-semibold tabular-nums leading-tight",
+          toneClass,
+        )}
+      >
         {value}
       </div>
       <div className="text-muted-foreground mt-2 text-xs">{subtitle}</div>

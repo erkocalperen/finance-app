@@ -214,8 +214,8 @@ export function TransactionsManager({
 
 function amountClass(type: EntryType) {
   return type === "income"
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-rose-600 dark:text-rose-400";
+    ? "text-income"
+    : "text-expense";
 }
 
 function amountText(row: TransactionRow) {
@@ -362,8 +362,8 @@ function TypePill({ row }: { row: TransactionRow }) {
       : row.kind === "debt_payment"
         ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
         : row.type === "income"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
-          : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300";
+          ? "border-income/30 bg-income/10 text-income"
+          : "border-expense/30 bg-expense/10 text-expense";
 
   return (
     <span

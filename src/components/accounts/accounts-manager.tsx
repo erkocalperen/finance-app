@@ -331,13 +331,15 @@ function AccountCard({
       <CardContent className="space-y-3">
         {isCreditCardDebt ? (
           <div>
-            <div className="text-muted-foreground text-xs">Borç</div>
-            <div className="text-2xl font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+            <div className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
+              Borç
+            </div>
+            <div className="font-display text-expense text-2xl font-semibold tabular-nums leading-tight">
               {formatCurrency(Math.abs(account.balance), account.currency)}
             </div>
           </div>
         ) : (
-          <div className="text-2xl font-semibold tabular-nums">
+          <div className="font-display text-2xl font-semibold tabular-nums leading-tight">
             {formatCurrency(account.balance, account.currency)}
           </div>
         )}

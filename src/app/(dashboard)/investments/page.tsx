@@ -6,12 +6,14 @@ import {
   type HoldingRow,
   type TradeHistoryRow,
 } from "@/components/investments/investments-manager";
+import { PriceRefresher } from "@/components/investments/price-refresher";
 import type {
   TradeAccountOption,
   TradeInstrumentOption,
 } from "@/components/investments/trade-form-dialog";
 import { createClient } from "@/lib/supabase/server";
 import type { Currency } from "@/lib/constants";
+import { shouldRefresh as shouldRefreshPrices } from "@/lib/prices/staleness";
 import {
   extendWithInvestments,
   type InstrumentKind,
@@ -86,6 +88,7 @@ export default async function InvestmentsPage({
     holdingsRes,
     tradesRes,
     tradesCountRes,
+    latestPricesRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -126,6 +129,11 @@ export default async function InvestmentsPage({
       .from("investment_trades")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id),
+    // Fiyat kaynak + yaşı için latest_instrument_prices ayrıca çekilir
+    // (portfolio_holdings view'ı source içermediği için).
+    supabase
+      .from("latest_instrument_prices")
+      .select("instrument_id, source, as_of"),
   ]);
 
   const baseCurrency = (profileRes.data?.base_currency ?? "TRY") as Currency;
@@ -140,6 +148,30 @@ export default async function InvestmentsPage({
       currency: i.currency as Currency,
     }),
   );
+
+  // instrument_id -> { source, as_of } eşleşmesi. holdings mapping burayı okur.
+  const priceMetaById = new Map<string, { source: string; asOf: string }>();
+  for (const p of latestPricesRes.data ?? []) {
+    if (!p.instrument_id || !p.source || !p.as_of) continue;
+    priceMetaById.set(p.instrument_id, {
+      source: p.source,
+      asOf: p.as_of,
+    });
+  }
+
+  // shouldRefresh: sadece hisse enstrümanlarının en yeni fiyatına bak.
+  // Hisse yoksa refresh yok.
+  const stockInstrumentIds = (instrumentsRes.data ?? [])
+    .filter((i) => i.kind === "stock")
+    .map((i) => i.id);
+  const stockLatestAsOf = stockInstrumentIds
+    .map((id) => priceMetaById.get(id)?.asOf)
+    .filter((d): d is string => typeof d === "string");
+  const stocksExist = stockInstrumentIds.length > 0;
+  const stocksHaveNoPrices = stocksExist && stockLatestAsOf.length === 0;
+  const stocksAreStale = shouldRefreshPrices(stockLatestAsOf);
+  const shouldRefresh =
+    stocksExist && (stocksHaveNoPrices || stocksAreStale);
 
   const activeAccounts: TradeAccountOption[] = (accountsRes.data ?? [])
     .filter((a) => !a.is_archived)
@@ -161,22 +193,27 @@ export default async function InvestmentsPage({
         h.quantity != null &&
         h.avg_cost != null,
     )
-    .map((h) => ({
-      instrumentId: h.instrument_id as string,
-      symbol: h.symbol as string,
-      name: h.name as string,
-      kind: h.kind as InstrumentKind,
-      unit: h.unit as string,
-      currency: h.currency as Currency,
-      quantity: Number(h.quantity),
-      avgCost: Number(h.avg_cost),
-      totalCost: Number(h.total_cost ?? 0),
-      currentPrice: h.current_price == null ? null : Number(h.current_price),
-      priceAsOf: h.price_as_of,
-      marketValue: h.market_value == null ? null : Number(h.market_value),
-      pnl: h.pnl == null ? null : Number(h.pnl),
-      pnlPct: h.pnl_pct == null ? null : Number(h.pnl_pct),
-    }));
+    .map((h) => {
+      const meta = priceMetaById.get(h.instrument_id as string);
+      return {
+        instrumentId: h.instrument_id as string,
+        symbol: h.symbol as string,
+        name: h.name as string,
+        kind: h.kind as InstrumentKind,
+        unit: h.unit as string,
+        currency: h.currency as Currency,
+        quantity: Number(h.quantity),
+        avgCost: Number(h.avg_cost),
+        totalCost: Number(h.total_cost ?? 0),
+        currentPrice:
+          h.current_price == null ? null : Number(h.current_price),
+        priceAsOf: h.price_as_of,
+        priceSource: meta?.source ?? null,
+        marketValue: h.market_value == null ? null : Number(h.market_value),
+        pnl: h.pnl == null ? null : Number(h.pnl),
+        pnlPct: h.pnl_pct == null ? null : Number(h.pnl_pct),
+      } satisfies HoldingRow;
+    });
 
   // Supabase gen types investments'ı yeni tanıyacak; şimdilik unknown cast.
   const trades: TradeHistoryRow[] = (
@@ -232,6 +269,7 @@ export default async function InvestmentsPage({
       {emptyKind === "none" && (
         <Pagination page={page} totalPages={totalPages} />
       )}
+      <PriceRefresher shouldRefresh={shouldRefresh} />
     </div>
   );
 }

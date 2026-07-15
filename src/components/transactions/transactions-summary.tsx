@@ -39,14 +39,16 @@ function Tile({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border p-4">
-      <div className="text-muted-foreground text-xs">{label}</div>
+    <div className="rounded-xl border p-4">
+      <div className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
+        {label}
+      </div>
       <div
         className={
-          "mt-1 text-2xl font-semibold tabular-nums " +
+          "font-display mt-1 text-2xl font-semibold tabular-nums leading-tight " +
           (tone === "income"
-            ? "text-emerald-600 dark:text-emerald-400"
-            : "text-rose-600 dark:text-rose-400")
+            ? "text-income"
+            : "text-expense")
         }
       >
         {children}

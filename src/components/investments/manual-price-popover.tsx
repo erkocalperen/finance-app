@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +30,7 @@ export function ManualPricePopover({
   currentPrice,
   trigger,
 }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -52,6 +54,7 @@ export function ManualPricePopover({
       }
       toast.success("Fiyat güncellendi.");
       setOpen(false);
+      router.refresh();
     });
   }
 

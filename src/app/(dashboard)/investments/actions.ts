@@ -243,13 +243,18 @@ export async function setManualPrice(
   const ins = await loadInstrument(ctx.supabase, data.instrument_id);
   if ("error" in ins) return ins;
 
-  const { error } = await ctx.supabase.from("instrument_prices").insert({
-    instrument_id: data.instrument_id,
-    price: data.price,
-    source: "manual",
-  });
+  const { data: inserted, error } = await ctx.supabase
+    .from("instrument_prices")
+    .insert({
+      instrument_id: data.instrument_id,
+      price: data.price,
+      as_of: new Date().toISOString(),
+      source: "manual",
+    })
+    .select("id")
+    .single();
 
-  if (error) return { error: "Fiyat kaydedilemedi." };
+  if (error || !inserted) return { error: "Fiyat kaydedilemedi." };
 
   revalidatePath("/investments");
   revalidatePath("/dashboard");

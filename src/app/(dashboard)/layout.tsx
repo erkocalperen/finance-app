@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DashboardNav } from "@/components/dashboard/dashboard-nav";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
+import { ModeToggle } from "@/components/mode-toggle";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "../(auth)/actions";
 
@@ -28,10 +29,11 @@ export default async function DashboardLayout({
       <div className="flex flex-1 flex-col">
         <header className="flex items-center gap-3 border-b px-4 py-3 md:px-6">
           <MobileNav />
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
             <span className="text-muted-foreground hidden text-sm sm:inline">
               {user.email}
             </span>
+            <ModeToggle />
             <form action={signOut}>
               <Button type="submit" variant="outline" size="sm">
                 Çıkış Yap
