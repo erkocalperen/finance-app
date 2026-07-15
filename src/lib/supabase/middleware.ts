@@ -28,9 +28,14 @@ export async function updateSession(request: NextRequest) {
 
   // getUser() cookie'yi Supabase Auth server'ında doğrular.
   // getSession() salt cookie okumasıdır — server-side güvenlik kararı için güvenilmez.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  return { supabaseResponse, user };
+    return { supabaseResponse, user };
+  } catch (error) {
+    console.warn("Supabase auth getUser failed in middleware:", error);
+    return { supabaseResponse, user: null };
+  }
 }
