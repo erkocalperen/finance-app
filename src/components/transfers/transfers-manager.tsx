@@ -50,6 +50,7 @@ export type TransferRow = {
   amount: number;
   currency: Currency;
   received_amount: number;
+  counts_as_expense: boolean;
   occurred_on: string;
   note: string | null;
   fromAccount: { id: string; name: string; currency: Currency };
@@ -141,6 +142,7 @@ export function TransfersManager({
                 to_account_id: formState.transfer.toAccount.id,
                 amount: formState.transfer.amount,
                 received_amount: formState.transfer.received_amount,
+                counts_as_expense: formState.transfer.counts_as_expense,
                 occurred_on: formState.transfer.occurred_on,
                 note: formState.transfer.note ?? "",
               }
@@ -227,7 +229,10 @@ function TransfersTable({
                 {formatDate(row.occurred_on)}
               </TableCell>
               <TableCell>
-                <DirectionCell row={row} />
+                <div className="space-y-1">
+                  <DirectionCell row={row} />
+                  {row.counts_as_expense && <ExpenseBadge />}
+                </div>
               </TableCell>
               <TableCell className="text-muted-foreground max-w-xs truncate">
                 {row.note ?? ""}
@@ -277,6 +282,11 @@ function TransfersCards({
             <div className="text-muted-foreground mt-0.5 text-xs">
               {formatDate(row.occurred_on)}
             </div>
+            {row.counts_as_expense && (
+              <div className="mt-1">
+                <ExpenseBadge />
+              </div>
+            )}
             {row.note && (
               <div className="text-muted-foreground mt-1 truncate text-xs">
                 {row.note}
@@ -290,6 +300,14 @@ function TransfersCards({
         </li>
       ))}
     </ul>
+  );
+}
+
+function ExpenseBadge() {
+  return (
+    <span className="inline-flex h-5 items-center rounded-full border border-rose-200 bg-rose-50 px-2 text-xs font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
+      Gider sayılır
+    </span>
   );
 }
 

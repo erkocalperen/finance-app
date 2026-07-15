@@ -81,6 +81,7 @@ export type TradeHistoryRow = {
   quantity: number;
   unitPrice: number;
   fee: number;
+  countsAsCashFlow: boolean;
   occurredOn: string;
   note: string | null;
   instrument: {
@@ -393,6 +394,7 @@ export function InvestmentsManager({
                 quantity: formState.trade.quantity,
                 unit_price: formState.trade.unitPrice,
                 fee: formState.trade.fee,
+                counts_as_cash_flow: formState.trade.countsAsCashFlow,
                 occurred_on: formState.trade.occurredOn,
                 note: formState.trade.note ?? "",
               }
@@ -532,6 +534,15 @@ function sideBadge(side: TradeSide) {
   );
 }
 
+function ReportBadge({ row }: { row: TradeHistoryRow }) {
+  if (row.countsAsCashFlow) return null;
+  return (
+    <Badge variant="outline" className="border-slate-300 text-slate-600">
+      Rapor dışı
+    </Badge>
+  );
+}
+
 function TradesTable({
   rows,
   onEdit,
@@ -568,7 +579,12 @@ function TradesTable({
                   {row.instrument.symbol}
                 </div>
               </TableCell>
-              <TableCell>{sideBadge(row.side)}</TableCell>
+              <TableCell>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {sideBadge(row.side)}
+                  <ReportBadge row={row} />
+                </div>
+              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatQuantity(row.quantity, row.instrument.unit)}
               </TableCell>
@@ -620,6 +636,7 @@ function TradesCards({
             </div>
             <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
               {sideBadge(row.side)}
+              <ReportBadge row={row} />
               <span className="tabular-nums">
                 {formatQuantity(row.quantity, row.instrument.unit)}
               </span>

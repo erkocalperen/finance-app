@@ -33,6 +33,7 @@ export type InvestmentTradeRow = {
   quantity: number;
   unit_price: number;
   fee: number;
+  counts_as_cash_flow: boolean;
   occurred_on: string;
   note: string | null;
   created_at: string;
@@ -48,6 +49,7 @@ export type InvestmentTradeInsert = {
   quantity: number;
   unit_price: number;
   fee?: number;
+  counts_as_cash_flow?: boolean;
   occurred_on: string;
   note?: string | null;
   created_at?: string;

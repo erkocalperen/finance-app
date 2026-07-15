@@ -102,6 +102,7 @@ export function AccountsManager({ accounts }: { accounts: AccountRow[] }) {
           id: a.id,
           name: a.name,
           currency: a.currency,
+          type: a.type,
         })),
     [accounts],
   );
@@ -144,6 +145,7 @@ export function AccountsManager({ accounts }: { accounts: AccountRow[] }) {
         to_account_id: account.id,
         amount: debtStr,
         received_amount: debtStr,
+        counts_as_expense: false,
       },
     });
   }

@@ -20,15 +20,16 @@ type TransferRaw = {
   amount: number;
   currency: string;
   received_amount: number;
+  counts_as_expense: boolean;
   occurred_on: string;
   note: string | null;
   from_account:
-    | { id: string; name: string; currency: string }
-    | { id: string; name: string; currency: string }[]
+    | { id: string; name: string; currency: string; type: string }
+    | { id: string; name: string; currency: string; type: string }[]
     | null;
   to_account:
-    | { id: string; name: string; currency: string }
-    | { id: string; name: string; currency: string }[]
+    | { id: string; name: string; currency: string; type: string }
+    | { id: string; name: string; currency: string; type: string }[]
     | null;
 };
 
@@ -60,15 +61,15 @@ export default async function TransfersPage({
   const [accountsRes, listRes] = await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, currency, is_archived")
+      .select("id, name, currency, type, is_archived")
       .eq("user_id", user.id)
       .order("name"),
     supabase
       .from("transfers")
       .select(
-        `id, amount, currency, received_amount, occurred_on, note,
-         from_account:accounts!from_account_id(id, name, currency),
-         to_account:accounts!to_account_id(id, name, currency)`,
+        `id, amount, currency, received_amount, counts_as_expense, occurred_on, note,
+         from_account:accounts!from_account_id(id, name, currency, type),
+         to_account:accounts!to_account_id(id, name, currency, type)`,
         { count: "exact" },
       )
       .eq("user_id", user.id)
@@ -85,6 +86,7 @@ export default async function TransfersPage({
       id: a.id,
       name: a.name,
       currency: a.currency as Currency,
+      type: a.type as TransferAccountOption["type"],
     }));
 
   // Supabase gen types transfers'ı henüz tanımıyor (regen sonrası düzelecek).
@@ -99,6 +101,7 @@ export default async function TransfersPage({
         amount: Number(r.amount),
         currency: r.currency as Currency,
         received_amount: Number(r.received_amount),
+        counts_as_expense: Boolean(r.counts_as_expense),
         occurred_on: r.occurred_on,
         note: r.note,
         fromAccount: {

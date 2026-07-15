@@ -27,6 +27,7 @@ type TradeRaw = {
   quantity: number;
   unit_price: number;
   fee: number;
+  counts_as_cash_flow: boolean;
   occurred_on: string;
   note: string | null;
   instrument:
@@ -112,7 +113,7 @@ export default async function InvestmentsPage({
     supabase
       .from("investment_trades")
       .select(
-        `id, side, quantity, unit_price, fee, occurred_on, note,
+        `id, side, quantity, unit_price, fee, counts_as_cash_flow, occurred_on, note,
          instrument:instruments(id, name, symbol, unit, currency, kind),
          account:accounts(id, name, currency)`,
         { count: "exact" },
@@ -191,6 +192,7 @@ export default async function InvestmentsPage({
         quantity: Number(r.quantity),
         unitPrice: Number(r.unit_price),
         fee: Number(r.fee),
+        countsAsCashFlow: Boolean(r.counts_as_cash_flow),
         occurredOn: r.occurred_on,
         note: r.note,
         instrument: {

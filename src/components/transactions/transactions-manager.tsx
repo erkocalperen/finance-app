@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteTransaction } from "@/app/(dashboard)/transactions/actions";
 import type { Currency, EntryType } from "@/lib/constants";
+import { ENTRY_TYPE_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -48,6 +49,7 @@ import {
 
 export type TransactionRow = {
   id: string;
+  kind: "transaction" | "investment" | "debt_payment";
   type: EntryType;
   amount: number;
   currency: Currency;
@@ -65,6 +67,10 @@ export type TransactionRow = {
     name: string;
     currency: Currency;
   };
+  relatedAccountIds?: string[];
+  typeLabel?: string;
+  isReadonly?: boolean;
+  countsInSummary?: boolean;
 };
 
 type Props = {
@@ -153,7 +159,8 @@ export function TransactionsManager({
         }}
         mode={formState?.mode ?? "create"}
         initial={
-          formState?.mode === "edit"
+          formState?.mode === "edit" &&
+          formState.transaction.kind === "transaction"
             ? {
                 id: formState.transaction.id,
                 type: formState.transaction.type,
@@ -216,6 +223,10 @@ function amountText(row: TransactionRow) {
   return `${sign} ${formatCurrency(row.amount, row.currency)}`;
 }
 
+function typeLabel(row: TransactionRow) {
+  return row.typeLabel ?? ENTRY_TYPE_LABELS[row.type];
+}
+
 function TransactionTable({
   rows,
   onEdit,
@@ -232,6 +243,7 @@ function TransactionTable({
         <TableHeader>
           <TableRow>
             <TableHead className="w-28">Tarih</TableHead>
+            <TableHead className="w-32">Tip</TableHead>
             <TableHead>Kategori</TableHead>
             <TableHead>Hesap</TableHead>
             <TableHead>Not</TableHead>
@@ -244,6 +256,9 @@ function TransactionTable({
             <TableRow key={row.id}>
               <TableCell className="text-muted-foreground">
                 {formatDate(row.occurred_on)}
+              </TableCell>
+              <TableCell>
+                <TypePill row={row} />
               </TableCell>
               <TableCell>
                 <span className="flex items-center gap-2">
@@ -268,10 +283,12 @@ function TransactionTable({
                 {amountText(row)}
               </TableCell>
               <TableCell>
-                <RowMenu
-                  onEdit={() => onEdit(row)}
-                  onDelete={() => onDelete(row)}
-                />
+                {row.isReadonly ? null : (
+                  <RowMenu
+                    onEdit={() => onEdit(row)}
+                    onDelete={() => onDelete(row)}
+                  />
+                )}
               </TableCell>
             </TableRow>
           ))}
@@ -314,6 +331,8 @@ function TransactionCards({
               </span>
             </div>
             <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+              <span>{typeLabel(row)}</span>
+              <span>·</span>
               <span>{formatDate(row.occurred_on)}</span>
               <span>·</span>
               <span className="truncate">{row.account.name}</span>
@@ -324,13 +343,37 @@ function TransactionCards({
               </div>
             )}
           </div>
-          <RowMenu
-            onEdit={() => onEdit(row)}
-            onDelete={() => onDelete(row)}
-          />
+          {row.isReadonly ? null : (
+            <RowMenu
+              onEdit={() => onEdit(row)}
+              onDelete={() => onDelete(row)}
+            />
+          )}
         </li>
       ))}
     </ul>
+  );
+}
+
+function TypePill({ row }: { row: TransactionRow }) {
+  const className =
+    row.kind === "investment"
+      ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300"
+      : row.kind === "debt_payment"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+        : row.type === "income"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+          : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex h-6 items-center rounded-full border px-2 text-xs font-medium",
+        className,
+      )}
+    >
+      {typeLabel(row)}
+    </span>
   );
 }
 

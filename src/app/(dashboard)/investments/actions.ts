@@ -123,6 +123,7 @@ export async function createTrade(
     quantity: data.quantity,
     unit_price: data.unit_price,
     fee: data.fee,
+    counts_as_cash_flow: data.counts_as_cash_flow,
     occurred_on: data.occurred_on,
     note: data.note?.trim() ? data.note.trim() : null,
   });
@@ -130,6 +131,7 @@ export async function createTrade(
   if (error) return { error: "İşlem kaydedilemedi." };
 
   revalidatePath("/investments");
+  revalidatePath("/transactions");
   revalidatePath("/accounts");
   revalidatePath("/dashboard");
 }
@@ -193,6 +195,7 @@ export async function updateTrade(
       quantity: data.quantity,
       unit_price: data.unit_price,
       fee: data.fee,
+      counts_as_cash_flow: data.counts_as_cash_flow,
       occurred_on: data.occurred_on,
       note: data.note?.trim() ? data.note.trim() : null,
     })
@@ -202,6 +205,7 @@ export async function updateTrade(
   if (error) return { error: "İşlem güncellenemedi." };
 
   revalidatePath("/investments");
+  revalidatePath("/transactions");
   revalidatePath("/accounts");
   revalidatePath("/dashboard");
 }
@@ -221,6 +225,7 @@ export async function deleteTrade(
   if (error) return { error: "İşlem silinemedi." };
 
   revalidatePath("/investments");
+  revalidatePath("/transactions");
   revalidatePath("/accounts");
   revalidatePath("/dashboard");
 }

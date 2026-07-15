@@ -25,6 +25,7 @@ export const transferSchema = z
       .string()
       .max(200, { message: "Not en fazla 200 karakter olabilir." })
       .optional(),
+    counts_as_expense: z.boolean().optional().default(false),
   })
   .refine((d) => d.from_account_id !== d.to_account_id, {
     message: "Kimden ve kime hesapları farklı olmalı.",

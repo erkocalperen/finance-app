@@ -22,6 +22,7 @@ export type TransferRow = {
   amount: number;
   currency: string;
   received_amount: number;
+  counts_as_expense: boolean;
   occurred_on: string;
   note: string | null;
   created_at: string;
@@ -36,6 +37,7 @@ export type TransferInsert = {
   amount: number;
   currency?: string;
   received_amount: number;
+  counts_as_expense?: boolean;
   occurred_on: string;
   note?: string | null;
   created_at?: string;

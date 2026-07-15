@@ -14,6 +14,7 @@ import {
 import { SummaryTiles } from "@/components/dashboard/summary-tiles";
 import { createClient } from "@/lib/supabase/server";
 import { extendWithInvestments } from "@/types/database-investments";
+import { extendWithTransfers } from "@/types/database-transfers";
 import type { Currency, EntryType } from "@/lib/constants";
 import {
   currentMonth,
@@ -35,6 +36,39 @@ function first<T>(v: T | T[] | null | undefined): T | null {
   return Array.isArray(v) ? (v[0] ?? null) : v;
 }
 
+type DashboardInvestmentTrade = {
+  side: "buy" | "sell";
+  quantity: number;
+  unit_price: number;
+  fee: number;
+  counts_as_cash_flow: boolean;
+  occurred_on: string;
+};
+
+type DashboardDebtPayment = {
+  amount: number;
+  occurred_on: string;
+  counts_as_expense: boolean;
+  from_account:
+    | { type: string }
+    | { type: string }[]
+    | null;
+  to_account:
+    | { type: string }
+    | { type: string }[]
+    | null;
+};
+
+type DashboardCashTransaction = {
+  type: EntryType;
+  base_amount: number;
+  occurred_on: string;
+  account:
+    | { type: string }
+    | { type: string }[]
+    | null;
+};
+
 export default async function DashboardPage({ searchParams }: PageProps) {
   const base = await createClient();
   const {
@@ -42,6 +76,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   } = await base.auth.getUser();
   if (!user) redirect("/login");
   const supabase = extendWithInvestments(base);
+  const transferClient = extendWithTransfers(base);
 
   const params = await searchParams;
   const monthRaw =
@@ -49,6 +84,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const selected = parseMonthParam(monthRaw) ?? currentMonth();
   const prev = shiftMonth(selected, -1);
   const chartStart = shiftMonth(selected, -5);
+  const chartEndExclusive = shiftMonth(selected, 1);
 
   const [
     profileRes,
@@ -59,6 +95,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     categoryRes,
     recentRes,
     holdingsRes,
+    cashTransactionsRes,
+    investmentTradesRes,
+    debtPaymentsRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -67,7 +106,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .single(),
     supabase
       .from("account_balances")
-      .select("currency, balance")
+      .select("type, currency, balance")
       .eq("user_id", user.id),
     supabase
       .from("transactions")
@@ -105,6 +144,32 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .from("portfolio_holdings")
       .select("currency, market_value, current_price")
       .eq("user_id", user.id),
+    supabase
+      .from("transactions")
+      .select(
+        `type, base_amount, occurred_on,
+         account:accounts(type)`,
+      )
+      .eq("user_id", user.id)
+      .gte("occurred_on", toMonthDate(chartStart))
+      .lt("occurred_on", toMonthDate(chartEndExclusive)),
+    supabase
+      .from("investment_trades")
+      .select("side, quantity, unit_price, fee, counts_as_cash_flow, occurred_on")
+      .eq("user_id", user.id)
+      .gte("occurred_on", toMonthDate(chartStart))
+      .lt("occurred_on", toMonthDate(chartEndExclusive)),
+    transferClient
+      .from("transfers")
+      .select(
+        `amount, occurred_on, counts_as_expense,
+         from_account:accounts!from_account_id(type),
+         to_account:accounts!to_account_id(type)`,
+      )
+      .eq("user_id", user.id)
+      .eq("counts_as_expense", true)
+      .gte("occurred_on", toMonthDate(chartStart))
+      .lt("occurred_on", toMonthDate(chartEndExclusive)),
   ]);
 
   const baseCurrency = (profileRes.data?.base_currency ?? "TRY") as Currency;
@@ -113,12 +178,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   // Nakit bakiyeleri para birimine göre grupla.
   const cashMap = new Map<Currency, number>();
+  const debtMap = new Map<Currency, number>();
   for (const b of balancesRes.data ?? []) {
     if (!b.currency || b.balance == null) continue;
     const c = b.currency as Currency;
+    if (b.type === "credit_card") {
+      const balance = Number(b.balance);
+      const debt = balance < 0 ? Math.abs(balance) : 0;
+      if (debt > 0) debtMap.set(c, (debtMap.get(c) ?? 0) + debt);
+      continue;
+    }
     cashMap.set(c, (cashMap.get(c) ?? 0) + Number(b.balance));
   }
   const cashByCurrency = Array.from(cashMap.entries())
+    .map(([currency, total]) => ({ currency, total }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+  const debtByCurrency = Array.from(debtMap.entries())
     .map(([currency, total]) => ({ currency, total }))
     .sort((a, b) => a.currency.localeCompare(b.currency));
 
@@ -155,6 +230,55 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       expense: Number(r.total_expense ?? 0),
     });
   }
+  for (const r of (investmentTradesRes.data ?? []) as DashboardInvestmentTrade[]) {
+    if (!r.counts_as_cash_flow) continue;
+    const key = `${r.occurred_on.slice(0, 7)}-01`;
+    const row = monthlyByKey.get(key) ?? { income: 0, expense: 0 };
+    const gross = Number(r.quantity) * Number(r.unit_price);
+    const fee = Number(r.fee ?? 0);
+    if (r.side === "buy") row.expense += gross + fee;
+    else row.income += Math.max(gross - fee, 0);
+    monthlyByKey.set(key, row);
+  }
+  for (const r of (debtPaymentsRes.data ?? []) as unknown as DashboardDebtPayment[]) {
+    const to = first(r.to_account);
+    if (!r.counts_as_expense || to?.type !== "credit_card") continue;
+    const key = `${r.occurred_on.slice(0, 7)}-01`;
+    const row = monthlyByKey.get(key) ?? { income: 0, expense: 0 };
+    row.expense += Number(r.amount ?? 0);
+    monthlyByKey.set(key, row);
+  }
+
+  const cashFlowByKey = new Map<string, number>();
+  for (const r of (cashTransactionsRes.data ?? []) as unknown as DashboardCashTransaction[]) {
+    const account = first(r.account);
+    if (account?.type === "credit_card") continue;
+    const key = `${r.occurred_on.slice(0, 7)}-01`;
+    const amount = Number(r.base_amount ?? 0);
+    cashFlowByKey.set(
+      key,
+      (cashFlowByKey.get(key) ?? 0) +
+        (r.type === "income" ? amount : -amount),
+    );
+  }
+  for (const r of (investmentTradesRes.data ?? []) as DashboardInvestmentTrade[]) {
+    if (!r.counts_as_cash_flow) continue;
+    const key = `${r.occurred_on.slice(0, 7)}-01`;
+    const gross = Number(r.quantity) * Number(r.unit_price);
+    const fee = Number(r.fee ?? 0);
+    cashFlowByKey.set(
+      key,
+      (cashFlowByKey.get(key) ?? 0) +
+        (r.side === "buy" ? -(gross + fee) : Math.max(gross - fee, 0)),
+    );
+  }
+  for (const r of (debtPaymentsRes.data ?? []) as unknown as DashboardDebtPayment[]) {
+    const from = first(r.from_account);
+    const to = first(r.to_account);
+    if (from?.type === "credit_card" || to?.type !== "credit_card") continue;
+    const key = `${r.occurred_on.slice(0, 7)}-01`;
+    cashFlowByKey.set(key, (cashFlowByKey.get(key) ?? 0) - Number(r.amount ?? 0));
+  }
 
   const currentRow = monthlyByKey.get(toMonthDate(selected));
   const prevRow = monthlyByKey.get(toMonthDate(prev));
@@ -162,6 +286,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const currentExpense = currentRow?.expense ?? 0;
   const prevIncome = prevRow?.income ?? 0;
   const prevExpense = prevRow?.expense ?? 0;
+  const currentCashFlow = cashFlowByKey.get(toMonthDate(selected)) ?? 0;
+  const prevCashFlow = cashFlowByKey.get(toMonthDate(prev)) ?? 0;
 
   const monthlyBars: MonthlyBar[] = [];
   for (let i = 0; i < 6; i++) {
@@ -179,7 +305,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   );
 
   // Donut için kategori dağılımı.
-  const slices: CategorySlice[] = (categoryRes.data ?? [])
+  const selectedMonthKey = toMonthDate(selected);
+  const sliceMap = new Map<string, CategorySlice>();
+
+  for (const slice of (categoryRes.data ?? [])
     .filter(
       (r) =>
         r.category_id != null &&
@@ -192,8 +321,49 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       name: r.category_name as string,
       color: r.color as string,
       total: Number(r.total),
-    }))
-    .sort((a, b) => b.total - a.total);
+    }))) {
+    sliceMap.set(slice.categoryId, slice);
+  }
+
+  const addExpenseSlice = (
+    categoryId: string,
+    name: string,
+    color: string,
+    total: number,
+  ) => {
+    if (total <= 0) return;
+    const existing = sliceMap.get(categoryId);
+    if (existing) existing.total += total;
+    else sliceMap.set(categoryId, { categoryId, name, color, total });
+  };
+
+  let investmentExpenseTotal = 0;
+  for (const r of (investmentTradesRes.data ?? []) as DashboardInvestmentTrade[]) {
+    if (!r.counts_as_cash_flow) continue;
+    if (r.side !== "buy") continue;
+    if (`${r.occurred_on.slice(0, 7)}-01` !== selectedMonthKey) continue;
+    investmentExpenseTotal +=
+      Number(r.quantity) * Number(r.unit_price) + Number(r.fee ?? 0);
+  }
+  addExpenseSlice("virtual-investment", "Yatırım", "#0ea5e9", investmentExpenseTotal);
+
+  let debtPaymentExpenseTotal = 0;
+  for (const r of (debtPaymentsRes.data ?? []) as unknown as DashboardDebtPayment[]) {
+    const to = first(r.to_account);
+    if (!r.counts_as_expense || to?.type !== "credit_card") continue;
+    if (`${r.occurred_on.slice(0, 7)}-01` !== selectedMonthKey) continue;
+    debtPaymentExpenseTotal += Number(r.amount ?? 0);
+  }
+  addExpenseSlice(
+    "virtual-debt-payment",
+    "Borç ödeme",
+    "#f59e0b",
+    debtPaymentExpenseTotal,
+  );
+
+  const slices: CategorySlice[] = Array.from(sliceMap.values()).sort(
+    (a, b) => b.total - a.total,
+  );
 
   // Son 5 işlem.
   const recent: RecentTransaction[] = (recentRes.data ?? []).map((r) => {
@@ -226,10 +396,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           <SummaryTiles
             currentIncome={currentIncome}
             currentExpense={currentExpense}
+            currentCashFlow={currentCashFlow}
             prevIncome={prevIncome}
             prevExpense={prevExpense}
+            prevCashFlow={prevCashFlow}
             cashByCurrency={cashByCurrency}
             portfolioByCurrency={portfolioByCurrency}
+            debtByCurrency={debtByCurrency}
             hasMissingPrices={hasMissingPrices}
             baseCurrency={baseCurrency}
           />

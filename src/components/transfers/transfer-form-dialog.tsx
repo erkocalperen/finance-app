@@ -37,9 +37,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/currency-input";
-import type { Currency } from "@/lib/constants";
+import { ACCOUNT_TYPE_LABELS, type AccountType, type Currency } from "@/lib/constants";
 import { formatDate, toIsoDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -56,6 +57,7 @@ export type TransferAccountOption = {
   id: string;
   name: string;
   currency: Currency;
+  type: AccountType;
 };
 
 type Props = {
@@ -76,6 +78,7 @@ function emptyFormValues(): TransferInputRaw {
     received_amount: "",
     occurred_on: toIsoDate(new Date()),
     note: "",
+    counts_as_expense: false,
   };
 }
 
@@ -91,6 +94,7 @@ function initialToFormValues(
       received_amount: String(init.received_amount),
       occurred_on: init.occurred_on,
       note: init.note ?? "",
+      counts_as_expense: init.counts_as_expense,
     };
   }
   return { ...emptyFormValues(), ...(prefill ?? {}) };
@@ -138,6 +142,7 @@ export function TransferFormDialog({
     fromAccount != null &&
     toAccount != null &&
     fromAccount.currency !== toAccount.currency;
+  const isCreditCardPayment = toAccount?.type === "credit_card";
 
   // Aynı para birimindeyse received_amount'ı amount ile senkronize tut
   // (görünmez alanın zod validation'ından geçebilmesi için).
@@ -234,7 +239,7 @@ export function TransferFormDialog({
                             <span className="flex items-center gap-2">
                               <span>{a.name}</span>
                               <span className="text-muted-foreground text-xs">
-                                {a.currency}
+                                {ACCOUNT_TYPE_LABELS[a.type]} · {a.currency}
                               </span>
                             </span>
                           </SelectItem>
@@ -278,7 +283,7 @@ export function TransferFormDialog({
                             <span className="flex items-center gap-2">
                               <span>{a.name}</span>
                               <span className="text-muted-foreground text-xs">
-                                {a.currency}
+                                {ACCOUNT_TYPE_LABELS[a.type]} · {a.currency}
                               </span>
                             </span>
                           </SelectItem>
@@ -334,6 +339,30 @@ export function TransferFormDialog({
                       karşı hesaba ulaşan miktar.
                     </p>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {isCreditCardPayment && (
+              <FormField
+                control={form.control}
+                name="counts_as_expense"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Gider olarak say</FormLabel>
+                      <p className="text-muted-foreground text-xs">
+                        Kart harcamalarını tek tek gider yazdıysan kapalı bırak.
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={Boolean(field.value)}
+                        onCheckedChange={field.onChange}
+                        disabled={isPending}
+                      />
+                    </FormControl>
                   </FormItem>
                 )}
               />

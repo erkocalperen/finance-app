@@ -27,7 +27,7 @@ async function loadAccountsPair(
   toId: string,
 ): Promise<
   | { error: string }
-  | { fromCurrency: string; toCurrency: string }
+  | { fromCurrency: string; toCurrency: string; toType: string }
 > {
   const [fromRes, toRes] = await Promise.all([
     supabase
@@ -38,7 +38,7 @@ async function loadAccountsPair(
       .maybeSingle(),
     supabase
       .from("accounts")
-      .select("id, currency, is_archived")
+      .select("id, currency, type, is_archived")
       .eq("id", toId)
       .eq("user_id", userId)
       .maybeSingle(),
@@ -52,6 +52,7 @@ async function loadAccountsPair(
   return {
     fromCurrency: fromRes.data.currency,
     toCurrency: toRes.data.currency,
+    toType: toRes.data.type,
   };
 }
 
@@ -79,6 +80,8 @@ export async function createTransfer(
     accountsResult.fromCurrency === accountsResult.toCurrency
       ? data.amount
       : data.received_amount;
+  const countsAsExpense =
+    accountsResult.toType === "credit_card" ? data.counts_as_expense : false;
 
   const { error } = await ctx.supabase.from("transfers").insert({
     user_id: ctx.user.id,
@@ -87,6 +90,7 @@ export async function createTransfer(
     amount: data.amount,
     currency: accountsResult.fromCurrency,
     received_amount: receivedAmount,
+    counts_as_expense: countsAsExpense,
     occurred_on: data.occurred_on,
     note: data.note?.trim() ? data.note.trim() : null,
   });
@@ -94,6 +98,7 @@ export async function createTransfer(
   if (error) return { error: "Transfer oluşturulamadı." };
 
   revalidatePath("/transfers");
+  revalidatePath("/transactions");
   revalidatePath("/accounts");
   revalidatePath("/dashboard");
 }
@@ -121,6 +126,8 @@ export async function updateTransfer(
     accountsResult.fromCurrency === accountsResult.toCurrency
       ? data.amount
       : data.received_amount;
+  const countsAsExpense =
+    accountsResult.toType === "credit_card" ? data.counts_as_expense : false;
 
   const { error } = await ctx.supabase
     .from("transfers")
@@ -130,6 +137,7 @@ export async function updateTransfer(
       amount: data.amount,
       currency: accountsResult.fromCurrency,
       received_amount: receivedAmount,
+      counts_as_expense: countsAsExpense,
       occurred_on: data.occurred_on,
       note: data.note?.trim() ? data.note.trim() : null,
     })
@@ -139,6 +147,7 @@ export async function updateTransfer(
   if (error) return { error: "Transfer güncellenemedi." };
 
   revalidatePath("/transfers");
+  revalidatePath("/transactions");
   revalidatePath("/accounts");
   revalidatePath("/dashboard");
 }
@@ -158,6 +167,7 @@ export async function deleteTransfer(
   if (error) return { error: "Transfer silinemedi." };
 
   revalidatePath("/transfers");
+  revalidatePath("/transactions");
   revalidatePath("/accounts");
   revalidatePath("/dashboard");
 }

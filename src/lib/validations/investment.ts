@@ -25,6 +25,7 @@ export const tradeSchema = z.object({
     .string()
     .max(200, { message: "Not en fazla 200 karakter olabilir." })
     .optional(),
+  counts_as_cash_flow: z.boolean().optional().default(true),
 });
 
 export type TradeInput = z.infer<typeof tradeSchema>;

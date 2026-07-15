@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ToggleGroup,
@@ -91,6 +92,7 @@ function emptyFormValues(): TradeInputRaw {
     quantity: "",
     unit_price: "",
     fee: "",
+    counts_as_cash_flow: true,
     occurred_on: toIsoDate(new Date()),
     note: "",
   };
@@ -107,6 +109,7 @@ function initialToFormValues(
     quantity: String(init.quantity),
     unit_price: String(init.unit_price),
     fee: String(init.fee),
+    counts_as_cash_flow: init.counts_as_cash_flow,
     occurred_on: init.occurred_on,
     note: init.note ?? "",
   };
@@ -423,6 +426,28 @@ export function TradeFormDialog({
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="counts_as_cash_flow"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel>Gider/nakit akışına yansıt</FormLabel>
+                    <p className="text-muted-foreground text-xs">
+                      Geçmiş portföyü tanımlıyorsan kapalı bırak.
+                    </p>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={Boolean(field.value)}
+                      onCheckedChange={field.onChange}
+                      disabled={isPending}
+                    />
+                  </FormControl>
                 </FormItem>
               )}
             />
