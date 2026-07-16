@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { getQuotesForInstruments } from "@/lib/prices";
 import { extendWithInvestments } from "@/types/database-investments";
 import {
   manualPriceSchema,
@@ -12,6 +13,10 @@ import {
 } from "@/lib/validations/investment";
 
 export type InvestmentActionResult = { error: string } | undefined;
+export type AddStockInstrumentResult =
+  | { error: string }
+  | { info: string }
+  | { success: true; symbol: string; name: string };
 
 type ExtendedClient = ReturnType<typeof extendWithInvestments>;
 
@@ -258,4 +263,64 @@ export async function setManualPrice(
 
   revalidatePath("/investments");
   revalidatePath("/dashboard");
+}
+
+export async function addStockInstrument(
+  symbol: string,
+): Promise<AddStockInstrumentResult> {
+  const ctx = await requireContext();
+  if (!ctx) return { error: "Oturum bulunamadı." };
+
+  const normalized = symbol.trim().toUpperCase();
+  if (!normalized) return { error: "BIST sembolü girin." };
+
+  const { data: existing } = await ctx.supabase
+    .from("instruments")
+    .select("id")
+    .eq("symbol", normalized)
+    .maybeSingle();
+
+  if (existing) return { info: "Bu hisse zaten ekli." };
+
+  const [quote] = await getQuotesForInstruments([
+    { id: normalized, symbol: normalized, kind: "stock" },
+  ]);
+
+  if (!quote) {
+    return {
+      error: `BIST'te '${normalized}' sembolü bulunamadı. Kodu kontrol edin.`,
+    };
+  }
+
+  const name = quote.name?.trim() || normalized;
+
+  const { data: instrument, error: insertError } = await ctx.supabase
+    .from("instruments")
+    .insert({
+      kind: "stock",
+      symbol: normalized,
+      name,
+      unit: "adet",
+      currency: "TRY",
+      is_active: true,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !instrument) {
+    if (insertError?.code === "23505") {
+      return { info: "Bu hisse zaten ekli." };
+    }
+    return { error: "Hisse eklenemedi." };
+  }
+
+  await ctx.supabase.from("instrument_prices").insert({
+    instrument_id: instrument.id,
+    price: quote.price,
+    as_of: quote.asOf,
+    source: quote.source,
+  });
+
+  revalidatePath("/investments");
+  return { success: true, symbol: normalized, name };
 }

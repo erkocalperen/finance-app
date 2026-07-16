@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   MoreHorizontal,
@@ -7,6 +8,7 @@ import {
   Plus,
   Receipt,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,7 +38,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { deleteTransaction } from "@/app/(dashboard)/transactions/actions";
+import {
+  deleteTransaction,
+  deleteTransactions,
+} from "@/app/(dashboard)/transactions/actions";
 import type { Currency, EntryType } from "@/lib/constants";
 import { ENTRY_TYPE_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -71,6 +76,7 @@ export type TransactionRow = {
   typeLabel?: string;
   isReadonly?: boolean;
   countsInSummary?: boolean;
+  source?: "manual" | "import";
 };
 
 type Props = {
@@ -94,7 +100,41 @@ export function TransactionsManager({
 }: Props) {
   const [formState, setFormState] = useState<FormState | null>(null);
   const [toDelete, setToDelete] = useState<TransactionRow | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selection, setSelection] = useState<{
+    scope: string;
+    ids: Set<string>;
+  }>({ scope: "", ids: new Set() });
   const [isDeleting, startDelete] = useTransition();
+
+  const selectableIds = transactions
+    .filter((row) => row.kind === "transaction" && !row.isReadonly)
+    .map((row) => row.id);
+  const selectionScope = selectableIds.join("|");
+  const selectedIds =
+    selection.scope === selectionScope ? selection.ids : new Set<string>();
+  const visibleSelectedIds = selectableIds.filter((id) => selectedIds.has(id));
+  const allSelected =
+    selectableIds.length > 0 && visibleSelectedIds.length === selectableIds.length;
+
+  function toggleSelected(id: string, checked: boolean) {
+    setSelection((current) => {
+      const ids =
+        current.scope === selectionScope
+          ? new Set(current.ids)
+          : new Set<string>();
+      if (checked) ids.add(id);
+      else ids.delete(id);
+      return { scope: selectionScope, ids };
+    });
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelection({
+      scope: selectionScope,
+      ids: checked ? new Set(selectableIds) : new Set(),
+    });
+  }
 
   function confirmDelete() {
     if (!toDelete) return;
@@ -107,7 +147,27 @@ export function TransactionsManager({
         return;
       }
       toast.success("İşlem silindi.");
+      toggleSelected(target.id, false);
       setToDelete(null);
+    });
+  }
+
+  function confirmBulkDelete() {
+    const ids = visibleSelectedIds;
+    if (ids.length === 0) return;
+    startDelete(async () => {
+      const result = await deleteTransactions(ids);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        result.skipped > 0
+          ? `${result.deleted} işlem silindi, ${result.skipped} kayıt atlandı.`
+          : `${result.deleted} işlem silindi.`,
+      );
+      setSelection({ scope: selectionScope, ids: new Set() });
+      setBulkDeleteOpen(false);
     });
   }
 
@@ -120,14 +180,50 @@ export function TransactionsManager({
             Gelir ve gider hareketlerini yönet, filtrele ve düzenle.
           </p>
         </div>
-        <Button
-          onClick={() => setFormState({ mode: "create" })}
-          disabled={accounts.length === 0}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Yeni İşlem
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {accounts.length > 0 ? (
+            <Button variant="outline" asChild>
+              <Link href="/transactions/import">
+                <Upload className="mr-2 h-4 w-4" />
+                Ekstre İçe Aktar
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              <Upload className="mr-2 h-4 w-4" />
+              Ekstre İçe Aktar
+            </Button>
+          )}
+          <Button
+            onClick={() => setFormState({ mode: "create" })}
+            disabled={accounts.length === 0}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Yeni İşlem
+          </Button>
+        </div>
       </div>
+
+      {visibleSelectedIds.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+          <span className="text-sm font-medium">
+            {visibleSelectedIds.length} işlem seçildi
+          </span>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => toggleAll(false)}>
+              Seçimi temizle
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Seçilenleri sil
+            </Button>
+          </div>
+        </div>
+      )}
 
       {emptyKind === "no-data" ? (
         <EmptyNoData
@@ -141,11 +237,17 @@ export function TransactionsManager({
           <TransactionTable
             rows={transactions}
             baseCurrency={baseCurrency}
+            selectedIds={selectedIds}
+            allSelected={allSelected}
+            onToggleSelected={toggleSelected}
+            onToggleAll={toggleAll}
             onEdit={(t) => setFormState({ mode: "edit", transaction: t })}
             onDelete={setToDelete}
           />
           <TransactionCards
             rows={transactions}
+            selectedIds={selectedIds}
+            onToggleSelected={toggleSelected}
             onEdit={(t) => setFormState({ mode: "edit", transaction: t })}
             onDelete={setToDelete}
           />
@@ -208,6 +310,30 @@ export function TransactionsManager({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Seçili işlemleri sil?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {visibleSelectedIds.length} gelir/gider kaydı kalıcı olarak
+              silinecek. Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                confirmBulkDelete();
+              }}
+              disabled={isDeleting || visibleSelectedIds.length === 0}
+            >
+              {isDeleting ? "Siliniyor..." : "Tümünü sil"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -229,11 +355,19 @@ function typeLabel(row: TransactionRow) {
 
 function TransactionTable({
   rows,
+  selectedIds,
+  allSelected,
+  onToggleSelected,
+  onToggleAll,
   onEdit,
   onDelete,
 }: {
   rows: TransactionRow[];
   baseCurrency: Currency;
+  selectedIds: Set<string>;
+  allSelected: boolean;
+  onToggleSelected: (id: string, checked: boolean) => void;
+  onToggleAll: (checked: boolean) => void;
   onEdit: (t: TransactionRow) => void;
   onDelete: (t: TransactionRow) => void;
 }) {
@@ -242,6 +376,15 @@ function TransactionTable({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">
+              <input
+                type="checkbox"
+                aria-label="Sayfadaki işlemleri seç"
+                checked={allSelected}
+                onChange={(event) => onToggleAll(event.target.checked)}
+                className="accent-primary h-4 w-4"
+              />
+            </TableHead>
             <TableHead className="w-28">Tarih</TableHead>
             <TableHead className="w-32">Tip</TableHead>
             <TableHead>Kategori</TableHead>
@@ -252,8 +395,24 @@ function TransactionTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.id}>
+          {rows.map((row) => {
+            const selectable = row.kind === "transaction" && !row.isReadonly;
+            const selected = selectable && selectedIds.has(row.id);
+            return (
+            <TableRow key={row.id} className={cn(selected && "bg-muted/40")}>
+              <TableCell>
+                {selectable && (
+                  <input
+                    type="checkbox"
+                    aria-label={`${row.category.name} işlemini seç`}
+                    checked={selected}
+                    onChange={(event) =>
+                      onToggleSelected(row.id, event.target.checked)
+                    }
+                    className="accent-primary h-4 w-4"
+                  />
+                )}
+              </TableCell>
               <TableCell className="text-muted-foreground">
                 {formatDate(row.occurred_on)}
               </TableCell>
@@ -291,7 +450,8 @@ function TransactionTable({
                 )}
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -300,17 +460,41 @@ function TransactionTable({
 
 function TransactionCards({
   rows,
+  selectedIds,
+  onToggleSelected,
   onEdit,
   onDelete,
 }: {
   rows: TransactionRow[];
+  selectedIds: Set<string>;
+  onToggleSelected: (id: string, checked: boolean) => void;
   onEdit: (t: TransactionRow) => void;
   onDelete: (t: TransactionRow) => void;
 }) {
   return (
     <ul className="divide-y rounded-lg border md:hidden">
-      {rows.map((row) => (
-        <li key={row.id} className="flex items-start gap-3 px-4 py-3">
+      {rows.map((row) => {
+        const selectable = row.kind === "transaction" && !row.isReadonly;
+        const selected = selectable && selectedIds.has(row.id);
+        return (
+        <li
+          key={row.id}
+          className={cn(
+            "flex items-start gap-3 px-4 py-3",
+            selected && "bg-muted/40",
+          )}
+        >
+          {selectable && (
+            <input
+              type="checkbox"
+              aria-label={`${row.category.name} işlemini seç`}
+              checked={selected}
+              onChange={(event) =>
+                onToggleSelected(row.id, event.target.checked)
+              }
+              className="accent-primary mt-1 h-4 w-4 shrink-0"
+            />
+          )}
           <span
             aria-hidden
             className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
@@ -350,7 +534,8 @@ function TransactionCards({
             />
           )}
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }

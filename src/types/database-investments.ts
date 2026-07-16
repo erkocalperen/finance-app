@@ -24,6 +24,17 @@ export type InstrumentRow = {
   created_at: string;
 };
 
+export type InstrumentInsert = {
+  id?: string;
+  kind: InstrumentKind;
+  symbol: string;
+  name: string;
+  unit: string;
+  currency?: string;
+  is_active?: boolean;
+  created_at?: string;
+};
+
 export type InvestmentTradeRow = {
   id: string;
   user_id: string;
@@ -106,7 +117,7 @@ type ExtendedDatabase = BaseDatabase & {
     Tables: BaseDatabase["public"]["Tables"] & {
       instruments: {
         Row: InstrumentRow;
-        Insert: never;
+        Insert: InstrumentInsert;
         Update: never;
         Relationships: [];
       };

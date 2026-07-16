@@ -22,22 +22,45 @@ import { ENTRY_TYPE_LABELS, type EntryType } from "@/lib/constants";
 
 const ALL = "all";
 
+const MONTHS = [
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
+] as const;
+
 type Option = { id: string; name: string; color?: string };
 
 type Props = {
   range: DateRangePreset;
+  year: number | null;
+  month: number | null;
+  currentYear: number;
   type: EntryType | null;
   categoryId: string | null;
   accountId: string | null;
+  source: "manual" | "import" | null;
   categories: Option[];
   accounts: Option[];
 };
 
 export function TransactionFilters({
   range,
+  year,
+  month,
+  currentYear,
   type,
   categoryId,
   accountId,
+  source,
   categories,
   accounts,
 }: Props) {
@@ -58,8 +81,32 @@ export function TransactionFilters({
 
   const setRange = (value: DateRangePreset) =>
     push((p) => {
+      p.delete("year");
+      p.delete("month");
       if (value === DEFAULT_DATE_RANGE) p.delete("range");
       else p.set("range", value);
+    });
+
+  const setYear = (value: string) =>
+    push((p) => {
+      p.delete("range");
+      if (value === ALL) {
+        p.delete("year");
+        p.delete("month");
+      } else {
+        p.set("year", value);
+      }
+    });
+
+  const setMonth = (value: string) =>
+    push((p) => {
+      p.delete("range");
+      if (value === ALL) {
+        p.delete("month");
+      } else {
+        p.set("month", value);
+        if (!year) p.set("year", String(currentYear));
+      }
     });
 
   const setType = (value: string) =>
@@ -80,13 +127,22 @@ export function TransactionFilters({
       else p.set("account", value);
     });
 
+  const setSource = (value: string) =>
+    push((p) => {
+      if (value === ALL) p.delete("source");
+      else p.set("source", value);
+    });
+
   const clearAll = () => router.push(pathname);
 
   const hasActiveFilter =
     range !== DEFAULT_DATE_RANGE ||
+    year !== null ||
+    month !== null ||
     type !== null ||
     categoryId !== null ||
-    accountId !== null;
+    accountId !== null ||
+    source !== null;
 
   return (
     <div className="flex flex-wrap items-end gap-2">
@@ -99,6 +155,40 @@ export function TransactionFilters({
             {DATE_RANGE_PRESETS.map((p) => (
               <SelectItem key={p} value={p}>
                 {DATE_RANGE_LABELS[p]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterField>
+
+      <FilterField label="Yıl">
+        <Select value={year ? String(year) : ALL} onValueChange={setYear}>
+          <SelectTrigger className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Tümü</SelectItem>
+            {Array.from({ length: currentYear - 1999 }, (_, index) => currentYear - index).map(
+              (value) => (
+                <SelectItem key={value} value={String(value)}>
+                  {value}
+                </SelectItem>
+              ),
+            )}
+          </SelectContent>
+        </Select>
+      </FilterField>
+
+      <FilterField label="Ay">
+        <Select value={month ? String(month) : ALL} onValueChange={setMonth}>
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Tümü</SelectItem>
+            {MONTHS.map((label, index) => (
+              <SelectItem key={label} value={String(index + 1)}>
+                {label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -155,6 +245,19 @@ export function TransactionFilters({
                 {a.name}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      </FilterField>
+
+      <FilterField label="Kaynak">
+        <Select value={source ?? ALL} onValueChange={setSource}>
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Tümü</SelectItem>
+            <SelectItem value="manual">Manuel</SelectItem>
+            <SelectItem value="import">Import</SelectItem>
           </SelectContent>
         </Select>
       </FilterField>

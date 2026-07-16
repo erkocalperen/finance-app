@@ -33,6 +33,7 @@ type TransactionEmbed = {
   fx_rate: number;
   occurred_on: string;
   note: string | null;
+  source: string;
   category:
     | { id: string; name: string; color: string; type: EntryType }
     | { id: string; name: string; color: string; type: EntryType }[]
@@ -107,9 +108,35 @@ export default async function TransactionsPage({
     return null;
   };
 
+  const currentYear = new Date().getFullYear();
+  const rawYear = Number(getStr("year"));
+  const rawMonth = Number(getStr("month"));
+  const requestedYear =
+    Number.isInteger(rawYear) && rawYear >= 2000 && rawYear <= 2100
+      ? rawYear
+      : null;
+  const monthFilter =
+    Number.isInteger(rawMonth) && rawMonth >= 1 && rawMonth <= 12
+      ? rawMonth
+      : null;
+  const yearFilter = requestedYear ?? (monthFilter ? currentYear : null);
+
   const rangeParam = getStr("range");
-  const range = isDateRangePreset(rangeParam) ? rangeParam : DEFAULT_DATE_RANGE;
-  const dateRange = computeDateRange(range);
+  const range = yearFilter
+    ? "all"
+    : isDateRangePreset(rangeParam)
+      ? rangeParam
+      : DEFAULT_DATE_RANGE;
+  const dateRange = yearFilter
+    ? {
+        from: `${yearFilter}-${String(monthFilter ?? 1).padStart(2, "0")}-01`,
+        to: monthFilter
+          ? `${yearFilter}-${String(monthFilter).padStart(2, "0")}-${String(
+              new Date(Date.UTC(yearFilter, monthFilter, 0)).getUTCDate(),
+            ).padStart(2, "0")}`
+          : `${yearFilter}-12-31`,
+      }
+    : computeDateRange(range);
 
   const typeParam = getStr("type");
   const typeFilter: EntryType | null =
@@ -117,6 +144,9 @@ export default async function TransactionsPage({
 
   const categoryFilter = getStr("category");
   const accountFilter = getStr("account");
+  const sourceParam = getStr("source");
+  const sourceFilter: "manual" | "import" | null =
+    sourceParam === "manual" || sourceParam === "import" ? sourceParam : null;
 
   const rawPage = Number(getStr("page") ?? 1);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
@@ -126,7 +156,7 @@ export default async function TransactionsPage({
   const listQuery = supabase
     .from("transactions")
     .select(
-      `id, type, amount, currency, fx_rate, occurred_on, note,
+      `id, type, amount, currency, fx_rate, occurred_on, note, source,
        category:categories(id, name, color, type),
        account:accounts(id, name, currency, type)`,
       { count: "exact" },
@@ -141,6 +171,9 @@ export default async function TransactionsPage({
   }
   if (accountFilter) {
     listQuery.eq("account_id", accountFilter);
+  }
+  if (sourceFilter) {
+    listQuery.eq("source", sourceFilter);
   }
   if (dateRange.from) {
     listQuery.gte("occurred_on", dateRange.from);
@@ -241,6 +274,7 @@ export default async function TransactionsPage({
         fx_rate: Number(r.fx_rate),
         occurred_on: r.occurred_on,
         note: r.note,
+        source: r.source === "import" ? "import" : "manual",
         category: {
           id: category.id,
           name: category.name,
@@ -329,6 +363,7 @@ export default async function TransactionsPage({
     .filter((r) => r !== null) as TransactionRow[];
 
   const virtualRows = [...investmentRows, ...debtPaymentRows].filter((r) => {
+    if (sourceFilter) return false;
     if (typeFilter && r.type !== typeFilter) return false;
     if (typeFilter && r.kind === "debt_payment" && !r.countsInSummary) {
       return false;
@@ -396,9 +431,13 @@ export default async function TransactionsPage({
 
       <TransactionFilters
         range={range}
+        year={yearFilter}
+        month={monthFilter}
+        currentYear={currentYear}
         type={typeFilter}
         categoryId={categoryFilter}
         accountId={accountFilter}
+        source={sourceFilter}
         categories={filterCategories}
         accounts={filterAccounts}
       />

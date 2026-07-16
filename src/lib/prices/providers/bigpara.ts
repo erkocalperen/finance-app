@@ -105,6 +105,9 @@ async function fetchOne(symbol: string): Promise<PriceQuote | null> {
     price,
     asOf: parseAsOf(d.tarih),
     source: "bigpara",
+    name: typeof d.aciklama === "string" && d.aciklama.trim()
+      ? d.aciklama.trim()
+      : undefined,
     changePercent: toChangePercent(d.yuzdedegisim),
   };
 }

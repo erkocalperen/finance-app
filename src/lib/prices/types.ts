@@ -3,6 +3,7 @@ export interface PriceQuote {
   price: number;
   asOf: string; // ISO tarih
   source: string; // 'bigpara' | ...
+  name?: string;
   changePercent?: number;
 }
 

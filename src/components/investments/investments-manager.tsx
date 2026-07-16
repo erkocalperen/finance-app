@@ -1,16 +1,14 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { tr } from "date-fns/locale";
 import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   MoreHorizontal,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
   TrendingUp,
 } from "lucide-react";
@@ -18,6 +16,11 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +59,12 @@ import {
   type TradeAccountOption,
   type TradeInstrumentOption,
 } from "./trade-form-dialog";
+import { AddStockDialog } from "./add-stock-dialog";
 import { ManualPricePopover } from "./manual-price-popover";
+import {
+  ManualPriceQuickUpdate,
+  type ManualPriceItem,
+} from "./manual-price-quick-update";
 import { RefreshPricesButton } from "./refresh-prices-button";
 
 export type HoldingRow = {
@@ -122,6 +130,12 @@ const KIND_LABEL: Record<InstrumentKind, string> = {
   stock: "Hisse",
 };
 
+const KIND_DOT_CLASS: Record<InstrumentKind, string> = {
+  gold: "bg-amber-500",
+  silver: "bg-slate-400",
+  stock: "bg-sky-500",
+};
+
 function pnlToneClass(v: number | null) {
   if (v == null) return "text-muted-foreground";
   if (v > 0) return "text-income";
@@ -138,9 +152,10 @@ function formatQuantity(n: number, unit: string): string {
 function priceAgeClass(asOf: string | null): string {
   if (!asOf) return "";
   const age = Date.now() - new Date(asOf).getTime();
+  const sixHours = 6 * 60 * 60 * 1000;
   const oneDay = 24 * 60 * 60 * 1000;
   if (age > 7 * oneDay) return "text-expense";
-  if (age > oneDay) return "text-amber-600 dark:text-amber-400";
+  if (age > sixHours) return "text-amber-600 dark:text-amber-400";
   return "text-muted-foreground";
 }
 
@@ -197,6 +212,24 @@ export function InvestmentsManager({
     }));
   }, [holdings]);
 
+  const manualPriceItems: ManualPriceItem[] = useMemo(
+    () =>
+      holdings
+        .filter((h) => h.quantity > 0 && (h.kind === "gold" || h.kind === "silver"))
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "tr"))
+        .map((h) => ({
+          instrumentId: h.instrumentId,
+          name: h.name,
+          symbol: h.symbol,
+          kind: h.kind,
+          currency: h.currency,
+          currentPrice: h.currentPrice,
+          priceAsOf: h.priceAsOf,
+        })),
+    [holdings],
+  );
+
   function confirmDelete() {
     if (!toDelete) return;
     const target = toDelete;
@@ -224,6 +257,7 @@ export function InvestmentsManager({
         </div>
         <div className="flex items-center gap-2">
           <RefreshPricesButton />
+          <AddStockDialog />
           <Button
             onClick={() => setFormState({ mode: "create" })}
             disabled={accounts.length === 0}
@@ -280,6 +314,8 @@ export function InvestmentsManager({
             </div>
           )}
 
+          <ManualPriceQuickUpdate items={manualPriceItems} />
+
           <section className="space-y-4">
             <h2 className="text-sm font-semibold">Varlıklar</h2>
             {groupedHoldings.length === 0 ? (
@@ -287,100 +323,15 @@ export function InvestmentsManager({
                 Aktif pozisyon yok. Yukarıdan yeni bir alım işlemi ekleyin.
               </div>
             ) : (
-              <div className="space-y-6">
-                {groupedHoldings.map((group) => (
-                  <div key={group.kind} className="space-y-2">
-                    <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      {KIND_LABEL[group.kind]}
-                    </div>
-                    <div className="overflow-hidden rounded-lg border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Enstrüman</TableHead>
-                            <TableHead className="text-right">Miktar</TableHead>
-                            <TableHead className="text-right">Ort. Maliyet</TableHead>
-                            <TableHead className="text-right">Güncel Fiyat</TableHead>
-                            <TableHead className="text-right">Değer</TableHead>
-                            <TableHead className="text-right">K/Z</TableHead>
-                            <TableHead className="text-right">K/Z %</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {group.items.map((h) => (
-                            <TableRow key={h.instrumentId}>
-                              <TableCell>
-                                <div className="font-medium">{h.name}</div>
-                                <div className="text-muted-foreground text-xs">
-                                  {h.symbol}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {formatQuantity(h.quantity, h.unit)}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {formatCurrency(h.avgCost, h.currency)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <PriceCell h={h} />
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {h.marketValue == null
-                                  ? "—"
-                                  : formatCurrency(h.marketValue, h.currency)}
-                              </TableCell>
-                              <TableCell
-                                className={cn(
-                                  "text-right tabular-nums",
-                                  pnlToneClass(h.pnl),
-                                )}
-                              >
-                                {h.pnl == null
-                                  ? "—"
-                                  : formatCurrency(h.pnl, h.currency)}
-                              </TableCell>
-                              <TableCell
-                                className={cn(
-                                  "text-right tabular-nums",
-                                  pnlToneClass(h.pnlPct),
-                                )}
-                              >
-                                {h.pnlPct == null
-                                  ? "—"
-                                  : `${h.pnlPct >= 0 ? "+" : ""}${h.pnlPct.toFixed(2)}%`}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <PositionsList groups={groupedHoldings} />
             )}
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold">İşlem geçmişi</h2>
-            {trades.length === 0 ? (
-              <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-                Henüz kayıt yok.
-              </div>
-            ) : (
-              <>
-                <TradesTable
-                  rows={trades}
-                  onEdit={(t) => setFormState({ mode: "edit", trade: t })}
-                  onDelete={setToDelete}
-                />
-                <TradesCards
-                  rows={trades}
-                  onEdit={(t) => setFormState({ mode: "edit", trade: t })}
-                  onDelete={setToDelete}
-                />
-              </>
-            )}
-          </section>
+          <TradesHistoryCollapsible
+            rows={trades}
+            onEdit={(t) => setFormState({ mode: "edit", trade: t })}
+            onDelete={setToDelete}
+          />
         </div>
       )}
 
@@ -443,6 +394,177 @@ export function InvestmentsManager({
   );
 }
 
+function compactPriceAge(asOf: string | null): string {
+  if (!asOf) return "fiyat yok";
+  const diff = Date.now() - new Date(asOf).getTime();
+  if (!Number.isFinite(diff)) return "";
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < hour) return `${Math.max(1, Math.floor(diff / minute))}dk`;
+  if (diff < day) return `${Math.floor(diff / hour)}sa`;
+  return `${Math.floor(diff / day)}g`;
+}
+
+function priceSourceLabel(source: string | null): string {
+  if (source === "bigpara") return "Bigpara";
+  if (source === "manual") return "Manuel";
+  return source ?? "";
+}
+
+function PositionsList({
+  groups,
+}: {
+  groups: Array<{ kind: InstrumentKind; items: HoldingRow[] }>;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border">
+      {groups.map((group) => (
+        <div key={group.kind}>
+          <div className="bg-muted/30 text-muted-foreground border-b px-3 py-2 text-[11px] font-medium tracking-[0.12em] uppercase">
+            {KIND_LABEL[group.kind]}
+          </div>
+          <div className="divide-y">
+            {group.items.map((h) => (
+              <PositionRow key={h.instrumentId} holding={h} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PositionRow({ holding: h }: { holding: HoldingRow }) {
+  const source = priceSourceLabel(h.priceSource);
+  const age = compactPriceAge(h.priceAsOf);
+  const pnlText =
+    h.pnl == null
+      ? "—"
+      : `${h.pnl >= 0 ? "+" : ""}${formatCurrency(h.pnl, h.currency)}`;
+  const pnlPctText =
+    h.pnlPct == null ? "" : ` · %${Math.abs(h.pnlPct).toFixed(1)}`;
+
+  return (
+    <div className="grid gap-2.5 px-3 py-3 transition-colors hover:bg-muted/30 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex min-w-0 gap-2.5">
+        <span
+          aria-hidden
+          className={cn(
+            "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
+            KIND_DOT_CLASS[h.kind],
+          )}
+        />
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-1.5">
+            <span className="truncate text-sm font-medium">{h.name}</span>
+            <span className="text-muted-foreground text-[11px]">{h.symbol}</span>
+          </div>
+          <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px]">
+            <span>{formatQuantity(h.quantity, h.unit)}</span>
+            <span aria-hidden>·</span>
+            <span>ort. {formatCurrency(h.avgCost, h.currency)}</span>
+            <span aria-hidden>·</span>
+            <span className={cn(h.currentPrice == null && "text-expense")}>
+              Güncel {h.currentPrice == null ? "—" : formatCurrency(h.currentPrice, h.currency)}
+            </span>
+            {source && (
+              <>
+                <span aria-hidden>·</span>
+                <span>{source}</span>
+              </>
+            )}
+            {age && (
+              <>
+                <span aria-hidden>·</span>
+                <span className={cn(priceAgeClass(h.priceAsOf))}>{age}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="min-w-0 border-t pt-2 sm:border-t-0 sm:pt-0 sm:text-right">
+        <div className="text-muted-foreground mb-0.5 text-[10px] font-medium tracking-[0.08em] uppercase">
+          Pozisyon değeri
+        </div>
+        {h.marketValue == null ? (
+          <div className="flex items-center gap-2 sm:justify-end">
+            <span className="font-display text-base font-semibold tabular-nums">—</span>
+            <ManualPricePopover
+              instrumentId={h.instrumentId}
+              instrumentName={h.name}
+              currency={h.currency}
+              currentPrice={null}
+              trigger={
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                  Fiyat gir
+                </Button>
+              }
+            />
+          </div>
+        ) : (
+          <div className="font-display text-base font-semibold tabular-nums leading-tight">
+            {formatCurrency(h.marketValue, h.currency)}
+          </div>
+        )}
+        <div
+          className={cn(
+            "mt-0.5 flex items-center gap-1 text-xs font-medium tabular-nums sm:justify-end",
+            pnlToneClass(h.pnl),
+          )}
+        >
+          <span className="text-muted-foreground text-[10px]">K/Z</span>
+          <span>
+            {pnlText}
+            {pnlPctText}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TradesHistoryCollapsible({
+  rows,
+  onEdit,
+  onDelete,
+}: {
+  rows: TradeHistoryRow[];
+  onEdit: (t: TradeHistoryRow) => void;
+  onDelete: (t: TradeHistoryRow) => void;
+}) {
+  return (
+    <Collapsible>
+      <section className="overflow-hidden rounded-xl border">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="group hover:bg-muted/30 flex w-full items-center justify-between px-4 py-3 text-left transition-colors"
+          >
+            <span className="text-sm font-semibold">
+              İşlem Geçmişi ({rows.length})
+            </span>
+            <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {rows.length === 0 ? (
+            <div className="text-muted-foreground border-t p-6 text-center text-sm">
+              Henüz kayıt yok.
+            </div>
+          ) : (
+            <div className="border-t">
+              <TradesTable rows={rows} onEdit={onEdit} onDelete={onDelete} />
+              <TradesCards rows={rows} onEdit={onEdit} onDelete={onDelete} />
+            </div>
+          )}
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
+  );
+}
+
 function SummaryTile({
   label,
   value,
@@ -477,59 +599,6 @@ function SummaryTile({
         <div className={cn("text-xs tabular-nums", cls)}>{subValue}</div>
       )}
     </div>
-  );
-}
-
-function PriceCell({ h }: { h: HoldingRow }) {
-  if (h.currentPrice == null) {
-    return (
-      <ManualPricePopover
-        instrumentId={h.instrumentId}
-        instrumentName={h.name}
-        currency={h.currency}
-        currentPrice={null}
-        trigger={
-          <Button variant="outline" size="sm" className="h-7">
-            <Sparkles className="mr-1 h-3 w-3" />
-            Fiyat gir
-          </Button>
-        }
-      />
-    );
-  }
-  const sourceLabel =
-    h.priceSource === "bigpara"
-      ? "Bigpara"
-      : h.priceSource === "manual"
-        ? "Manuel"
-        : (h.priceSource ?? "");
-
-  return (
-    <ManualPricePopover
-      instrumentId={h.instrumentId}
-      instrumentName={h.name}
-      currency={h.currency}
-      currentPrice={h.currentPrice}
-      trigger={
-        <button
-          type="button"
-          className="hover:bg-accent inline-flex flex-col items-end rounded px-2 py-0.5 text-right transition-colors"
-        >
-          <span className="tabular-nums">
-            {formatCurrency(h.currentPrice, h.currency)}
-          </span>
-          {h.priceAsOf && (
-            <span className={cn("text-[10px]", priceAgeClass(h.priceAsOf))}>
-              {sourceLabel && <>{sourceLabel} · </>}
-              {formatDistanceToNow(new Date(h.priceAsOf), {
-                locale: tr,
-                addSuffix: true,
-              })}
-            </span>
-          )}
-        </button>
-      }
-    />
   );
 }
 
@@ -590,7 +659,7 @@ function TradesTable({
         </TableHeader>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={row.id}>
+            <TableRow key={row.id} className="[&>td]:py-2">
               <TableCell className="text-muted-foreground">
                 {formatDate(row.occurredOn)}
               </TableCell>

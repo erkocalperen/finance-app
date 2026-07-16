@@ -270,9 +270,11 @@ export type Database = {
           currency: string
           fx_rate: number
           id: string
+          import_fingerprint: string | null
           note: string | null
           occurred_on: string
           recurring_rule_id: string | null
+          source: string
           type: Database["public"]["Enums"]["entry_type"]
           updated_at: string
           user_id: string
@@ -286,9 +288,11 @@ export type Database = {
           currency?: string
           fx_rate?: number
           id?: string
+          import_fingerprint?: string | null
           note?: string | null
           occurred_on: string
           recurring_rule_id?: string | null
+          source?: string
           type: Database["public"]["Enums"]["entry_type"]
           updated_at?: string
           user_id: string
@@ -302,9 +306,11 @@ export type Database = {
           currency?: string
           fx_rate?: number
           id?: string
+          import_fingerprint?: string | null
           note?: string | null
           occurred_on?: string
           recurring_rule_id?: string | null
+          source?: string
           type?: Database["public"]["Enums"]["entry_type"]
           updated_at?: string
           user_id?: string
